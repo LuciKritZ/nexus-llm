@@ -1,0 +1,25 @@
+# Agent
+.agent/
+
+# Documentation (ERD, Testing, Plan)
+.docs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+env/
+venv/
+.env
+
+# uv
+uv.lock
+
+# IDEs
+.vscode/
+.idea/
+.cursor/
