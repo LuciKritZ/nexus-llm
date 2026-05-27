@@ -59,6 +59,24 @@ def test_chat_completions_proxy(client: TestClient) -> None:
     assert " World" in content
 
 
+def test_chat_completions_proxy_ollama_old_image(client: TestClient) -> None:
+    payload = {
+        "model": "qwen",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Old image"},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64,aGVsbG8="}},
+                ],
+            },
+            {"role": "user", "content": "New text"},
+        ],
+    }
+    response = client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 200
+
+
 @patch("nexus_llm.services.gemini_client.GeminiClient.stream_generate_content")
 def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: TestClient) -> None:
     payload = {
