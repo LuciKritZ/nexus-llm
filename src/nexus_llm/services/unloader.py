@@ -16,27 +16,30 @@ class ModelUnloader:
     async def unload_if_needed(self, target_model: str) -> bool:
         """Unloads the active model if it differs from the target model.
 
+        Execution Flow:
+        1. Performs a quick check outside the lock to return early if no change is needed.
+        2. Rechecks inside a lock (double-checked locking).
+        3. If no active model exists (cold start), sets it and returns.
+        4. Triggers the unloading POST request to the Ollama API with keep_alive: 0.
+        5. Updates the active model state.
+
         Args:
             target_model: The model name requested for the upcoming generation.
 
         Returns:
             True if unloading was triggered, False otherwise.
         """
-        # Quick check outside the lock
         if self._active_model == target_model:
             return False
 
         async with self._lock:
-            # Recheck after acquiring lock (double-checked locking)
             if self._active_model == target_model:
                 return False
 
             if self._active_model is None:
-                # Cold start: first model load has no previous active model to unload
                 self._active_model = target_model
                 return False
 
-            # Perform unloading of self._active_model
             url = f"{self.ollama_url}/api/generate"
             payload = {
                 "model": self._active_model,
@@ -49,11 +52,9 @@ class ModelUnloader:
             )
 
             if self._http_client is not None:
-                # Use provided client (e.g. mock or shared client)
                 response = await self._http_client.post(url, json=payload)
                 response.raise_for_status()
             else:
-                # Fallback to creating a client
                 async with httpx.AsyncClient() as client:
                     response = await client.post(url, json=payload)
                     response.raise_for_status()

@@ -39,11 +39,18 @@ async def test_unloader_skipped_when_same_model_requested(mock_client: AsyncMock
 
 
 async def test_unloader_sends_correct_payload(mock_client: AsyncMock) -> None:
-    """A model switch should trigger unloading of the previously active model with keep_alive: 0."""
+    """
+    A model switch should trigger unloading of the previously active model with keep_alive: 0.
+
+    Execution Flow:
+    1. Sets up an initially active model.
+    2. Mocks a successful POST response to the Ollama API.
+    3. Requests a different model to trigger unloading.
+    4. Asserts that the unloading request was sent with the correct payload.
+    """
     engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
     engine._active_model = "qwen3.5:9b-mlx"
 
-    # Mock successful POST response
     req = httpx.Request("POST", "http://127.0.0.1:11434/api/generate")
     mock_response = httpx.Response(200, json={"status": "success"}, request=req)
     mock_client.post.return_value = mock_response
@@ -59,11 +66,17 @@ async def test_unloader_sends_correct_payload(mock_client: AsyncMock) -> None:
 
 
 async def test_concurrent_requests_dont_double_unload(mock_client: AsyncMock) -> None:
-    """Multiple concurrent requests for the same new model should trigger unloading only once."""
+    """
+    Multiple concurrent requests for the same new model should trigger unloading only once.
+
+    Execution Flow:
+    1. Mocks a delayed POST request to simulate a network call holding the asyncio lock.
+    2. Sends three concurrent requests for the same target model.
+    3. Asserts that only one request actually executed the HTTP unloading payload.
+    """
     engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
     engine._active_model = "qwen3.5:9b-mlx"
 
-    # Mock a delay to simulate active unloading call
     async def delayed_post(*args: typing.Any, **kwargs: typing.Any) -> httpx.Response:
         await asyncio.sleep(0.05)
         req = httpx.Request("POST", "http://127.0.0.1:11434/api/generate")
@@ -71,14 +84,12 @@ async def test_concurrent_requests_dont_double_unload(mock_client: AsyncMock) ->
 
     mock_client.post.side_effect = delayed_post
 
-    # Send three concurrent requests for the same target model
     results = await asyncio.gather(
         engine.unload_if_needed("llama3.2-vision"),
         engine.unload_if_needed("llama3.2-vision"),
         engine.unload_if_needed("llama3.2-vision"),
     )
 
-    # Only one request should report that it actually triggered unloading
     assert sum(1 for r in results if r) == 1
     assert engine._active_model == "llama3.2-vision"
     assert mock_client.post.call_count == 1
