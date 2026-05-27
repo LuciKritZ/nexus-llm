@@ -7,11 +7,15 @@ import pytest
 from nexus_llm.__main__ import main
 
 
-def test_main_clear_cache(capsys: pytest.CaptureFixture[str]) -> None:
+@patch("nexus_llm.__main__.ImageCache.clear")
+def test_main_clear_cache(
+    mock_clear: unittest.mock.MagicMock, capsys: pytest.CaptureFixture[str]
+) -> None:
     with patch.object(sys, "argv", ["nexus-llm", "--clear-cache"]):
         main()
     captured = capsys.readouterr()
     assert "Cache cleared!" in captured.out
+    mock_clear.assert_called_once()
 
 
 @patch("nexus_llm.__main__.uvicorn.run")

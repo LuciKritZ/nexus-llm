@@ -3,6 +3,7 @@ import argparse
 import uvicorn
 
 from nexus_llm.config import settings
+from nexus_llm.services.cache import ImageCache
 
 
 def main() -> None:
@@ -12,6 +13,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.clear_cache:
+        cache = ImageCache()
+        cache.clear()
         print("Cache cleared!")
         return
 
