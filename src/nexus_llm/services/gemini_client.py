@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -59,7 +60,7 @@ class GeminiClient:
     async def stream_generate_content(self, payload: dict[str, Any]) -> AsyncGenerator[bytes, None]:
         """Sends the payload to Gemini and yields raw SSE bytes, with retry logic."""
         gemini_payload = self._convert_openai_to_gemini(payload)
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:streamGenerateContent"
 
         headers = {"x-goog-api-key": self.api_key or ""}
         params = {"alt": "sse"}
@@ -87,8 +88,33 @@ class GeminiClient:
                             f"Gemini API returned {response.status_code}: {body.decode()}"
                         )
 
-                    async for chunk in response.aiter_bytes():
-                        yield chunk
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            if not data_str:
+                                continue
+                            if data_str == "[DONE]":
+                                yield b"data: [DONE]\n\n"
+                                continue
+
+                            try:
+                                data_json = json.loads(data_str)
+                                text = ""
+                                if data_json.get("candidates"):
+                                    candidate = data_json["candidates"][0]
+                                    if "content" in candidate and "parts" in candidate["content"]:
+                                        for part in candidate["content"]["parts"]:
+                                            if "text" in part:
+                                                text += part["text"]
+                                if text:
+                                    openai_chunk = {
+                                        "id": "chatcmpl-gemini",
+                                        "object": "chat.completion.chunk",
+                                        "choices": [{"delta": {"content": text}}],
+                                    }
+                                    yield f"data: {json.dumps(openai_chunk)}\n\n".encode()
+                            except json.JSONDecodeError:
+                                pass
 
                 # If we finish streaming successfully, return to exit the retry loop
                 return

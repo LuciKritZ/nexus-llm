@@ -58,11 +58,14 @@ async def test_stream_generate_content_success() -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
 
-    async def mock_aiter_bytes() -> AsyncGenerator[bytes, None]:
-        yield b"chunk1"
-        yield b"chunk2"
+    async def mock_aiter_lines() -> AsyncGenerator[str, None]:
+        yield 'data: {"candidates": [{"content": {"parts": [{"text": "chunk1"}]}}]}'
+        yield 'data: {"candidates": [{"content": {"parts": [{"text": "chunk2"}]}}]}'
+        yield "data: "
+        yield "data: [DONE]"
+        yield "data: invalid_json"
 
-    mock_response.aiter_bytes = mock_aiter_bytes
+    mock_response.aiter_lines = mock_aiter_lines
 
     # stream() returns an async context manager
     mock_context = MagicMock()
@@ -78,7 +81,10 @@ async def test_stream_generate_content_success() -> None:
     async for chunk in client.stream_generate_content({"messages": []}):
         chunks.append(chunk)
 
-    assert chunks == [b"chunk1", b"chunk2"]
+    assert len(chunks) == 3
+    assert b"chunk1" in chunks[0]
+    assert b"chunk2" in chunks[1]
+    assert chunks[2] == b"data: [DONE]\n\n"
     mock_client.stream.assert_called_once()
 
 
@@ -99,10 +105,10 @@ async def test_stream_generate_content_retry_on_429(mock_sleep: AsyncMock) -> No
     mock_response_200 = MagicMock()
     mock_response_200.status_code = 200
 
-    async def mock_aiter_bytes() -> AsyncGenerator[bytes, None]:
-        yield b"success_chunk"
+    async def mock_aiter_lines() -> AsyncGenerator[str, None]:
+        yield 'data: {"candidates": [{"content": {"parts": [{"text": "success_chunk"}]}}]}'
 
-    mock_response_200.aiter_bytes = mock_aiter_bytes
+    mock_response_200.aiter_lines = mock_aiter_lines
     mock_response_200.raise_for_status.return_value = None
 
     # We need to simulate __aenter__ returning different responses sequentially
@@ -119,7 +125,8 @@ async def test_stream_generate_content_retry_on_429(mock_sleep: AsyncMock) -> No
     async for chunk in client.stream_generate_content({"messages": []}):
         chunks.append(chunk)
 
-    assert chunks == [b"success_chunk"]
+    assert len(chunks) == 1
+    assert b"success_chunk" in chunks[0]
     assert mock_client.stream.call_count == 2
     mock_sleep.assert_called_once_with(1.0)
 

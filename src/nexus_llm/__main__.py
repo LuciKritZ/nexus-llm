@@ -1,4 +1,5 @@
 import argparse
+import logging
 
 import uvicorn
 
@@ -7,6 +8,7 @@ from nexus_llm.services.cache import ImageCache
 
 
 def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:\t  %(name)s - %(message)s")
     parser = argparse.ArgumentParser(description="nexus-llm proxy")
     parser.add_argument("--port", type=int, default=settings.port, help="Port to run the proxy on")
     parser.add_argument("--clear-cache", action="store_true", help="Clear the vision API cache")

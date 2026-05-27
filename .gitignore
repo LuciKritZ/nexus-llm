@@ -23,3 +23,4 @@ uv.lock
 .vscode/
 .idea/
 .cursor/
+.logs/
