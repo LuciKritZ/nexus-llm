@@ -104,27 +104,3 @@ async def test_unloader_error_handling(mock_client: AsyncMock) -> None:
 
     with pytest.raises(httpx.RequestError):
         await engine.unload_if_needed("llama3.2-vision")
-
-
-async def test_unloader_without_http_client_passed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """If no HTTP client is passed, it should instantiate a new AsyncClient and make the call."""
-    engine = ModelUnloader(ollama_url="http://127.0.0.1:11434")
-    engine._active_model = "qwen3.5:9b-mlx"
-
-    req = httpx.Request("POST", "http://127.0.0.1:11434/api/generate")
-    mock_response = httpx.Response(200, json={"status": "success"}, request=req)
-
-    called = False
-
-    async def mock_post(*args: typing.Any, **kwargs: typing.Any) -> httpx.Response:
-        nonlocal called
-        called = True
-        return mock_response
-
-    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
-
-    unloaded = await engine.unload_if_needed("llama3.2-vision")
-
-    assert unloaded
-    assert called
-    assert engine._active_model == "llama3.2-vision"

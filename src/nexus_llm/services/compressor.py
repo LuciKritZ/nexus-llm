@@ -25,7 +25,8 @@ class ContextCompressor:
         if original_length <= self.char_threshold:
             return text
 
-        if "<html" not in text.lower() and "<body" not in text.lower() and "</" not in text:
+        html_indicators = ("<html", "<body", "<div", "<table")
+        if not any(indicator in text.lower() for indicator in html_indicators) and "</" not in text:
             return text
 
         compressed_text = compress_html_to_markdown(text)

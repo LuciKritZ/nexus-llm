@@ -20,6 +20,7 @@ def test_compress_html_removes_scripts_and_styles() -> None:
     assert "body { color: red; }" not in result
     assert "console.log" not in result
 
+
 def test_compress_html_removes_nav_and_footer() -> None:
     html = """
     <body>
@@ -39,10 +40,12 @@ def test_compress_html_removes_nav_and_footer() -> None:
     assert "Sidebar content" not in result
     assert "Copyright 2026" not in result
 
+
 def test_compress_html_extracts_links() -> None:
     html = '<body>Click <a href="https://example.com">here</a>.</body>'
     result = compress_html_to_markdown(html)
     assert "[here](https://example.com)" in result
+
 
 def test_compress_html_handles_empty_string() -> None:
     assert compress_html_to_markdown("") == ""

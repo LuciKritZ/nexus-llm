@@ -7,7 +7,7 @@ import httpx
 class ModelUnloader:
     """Tracks the active model in Ollama VRAM and handles unloading on model switch."""
 
-    def __init__(self, ollama_url: str, http_client: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, ollama_url: str, http_client: httpx.AsyncClient) -> None:
         self.ollama_url = ollama_url.rstrip("/")
         self._http_client = http_client
         self._active_model: str | None = None
@@ -51,13 +51,8 @@ class ModelUnloader:
                 file=sys.stderr,
             )
 
-            if self._http_client is not None:
-                response = await self._http_client.post(url, json=payload)
-                response.raise_for_status()
-            else:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(url, json=payload)
-                    response.raise_for_status()
+            response = await self._http_client.post(url, json=payload)
+            response.raise_for_status()
 
             self._active_model = target_model
             return True
