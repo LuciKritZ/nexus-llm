@@ -59,6 +59,20 @@ def test_chat_completions_proxy(client: TestClient) -> None:
     assert " World" in content
 
 
+@patch("nexus_llm.routes.proxy.settings")
+def test_chat_completions_proxy_ollama_model_override(
+    mock_settings: typing.Any, client: TestClient
+) -> None:
+    mock_settings.ollama_model = "forced-model"
+    mock_settings.ollama_base_url = "http://127.0.0.1:11434"
+    payload = {
+        "model": "qwen",
+        "messages": [{"role": "user", "content": "Hi"}],
+    }
+    response = client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 200
+
+
 def test_chat_completions_proxy_ollama_old_image(client: TestClient) -> None:
     payload = {
         "model": "qwen",
