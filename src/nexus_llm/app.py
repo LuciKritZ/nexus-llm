@@ -16,7 +16,7 @@ from nexus_llm.services.unloader import ModelUnloader
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
-    client = httpx.AsyncClient()
+    client = httpx.AsyncClient(timeout=300.0)
     unloader = ModelUnloader(ollama_url=settings.ollama_base_url, http_client=client)
     compressor = ContextCompressor()
     cache = ImageCache()
