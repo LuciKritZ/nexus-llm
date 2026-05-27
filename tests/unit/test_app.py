@@ -1,13 +1,15 @@
 import pytest
 from fastapi.testclient import TestClient
+
 from nexus_llm.app import create_app
 
+
 @pytest.fixture
-def client():
+def client() -> TestClient:
     app = create_app()
     return TestClient(app)
 
-def test_chat_completions_skeleton(client):
+def test_chat_completions_skeleton(client: TestClient) -> None:
     payload = {
         "model": "qwen",
         "messages": [{"role": "user", "content": "Hi"}]

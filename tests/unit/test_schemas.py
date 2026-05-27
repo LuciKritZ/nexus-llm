@@ -1,8 +1,7 @@
-import pytest
-from pydantic import ValidationError
-from nexus_llm.models.schemas import ChatCompletionRequest, ChatMessage, ContentBlock
+from nexus_llm.models.schemas import ChatCompletionRequest
 
-def test_chat_completion_request_text():
+
+def test_chat_completion_request_text() -> None:
     payload = {
         "model": "qwen3.5",
         "messages": [
@@ -14,7 +13,7 @@ def test_chat_completion_request_text():
     assert len(request.messages) == 1
     assert request.messages[0].content == "Hello world!"
 
-def test_chat_completion_request_multimodal():
+def test_chat_completion_request_multimodal() -> None:
     payload = {
         "model": "qwen3.5",
         "messages": [
@@ -36,7 +35,7 @@ def test_chat_completion_request_multimodal():
     assert content[1].image_url is not None
     assert content[1].image_url.url == "data:image/jpeg;base64,12345"
 
-def test_chat_completion_extra_fields_preserved():
+def test_chat_completion_extra_fields_preserved() -> None:
     payload = {
         "model": "qwen3.5",
         "messages": [],

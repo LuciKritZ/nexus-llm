@@ -1,10 +1,13 @@
 import sys
+import unittest.mock
 from unittest.mock import patch
+
+import pytest
 
 from nexus_llm.__main__ import main
 
 
-def test_main_clear_cache(capsys):
+def test_main_clear_cache(capsys: pytest.CaptureFixture[str]) -> None:
     with patch.object(sys, "argv", ["nexus-llm", "--clear-cache"]):
         main()
     captured = capsys.readouterr()
@@ -12,7 +15,7 @@ def test_main_clear_cache(capsys):
 
 
 @patch("nexus_llm.__main__.uvicorn.run")
-def test_main_run_server(mock_run):
+def test_main_run_server(mock_run: unittest.mock.MagicMock) -> None:
     with patch.object(sys, "argv", ["nexus-llm", "--port", "1234"]):
         main()
     mock_run.assert_called_once_with(
