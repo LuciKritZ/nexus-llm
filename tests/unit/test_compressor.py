@@ -8,6 +8,7 @@ def test_compressor_skips_short_text() -> None:
     result = compressor.compress_if_needed(text)
     assert result == text
 
+
 def test_compressor_compresses_large_html() -> None:
     """
     Strips nav and footer from a large HTML string and returns the main content in markdown.
@@ -31,6 +32,7 @@ def test_compressor_compresses_large_html() -> None:
     reduction = 1.0 - (len(result) / len(html))
     assert reduction >= 0.65
 
+
 def test_compressor_returns_original_if_not_compressible() -> None:
     """
     If the reduction isn't at least 65% (e.g. string has no HTML boilerplate),
@@ -45,6 +47,7 @@ def test_compressor_returns_original_if_not_compressible() -> None:
 
     assert result == text
 
+
 def test_compressor_skips_non_html_text() -> None:
     """
     If the string is over 16,384 characters but has no HTML indicators,
@@ -57,6 +60,7 @@ def test_compressor_skips_non_html_text() -> None:
     result = compressor.compress_if_needed(text)
 
     assert result == text
+
 
 def test_compressor_handles_fully_stripped_payload() -> None:
     """
