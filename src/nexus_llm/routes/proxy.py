@@ -1,3 +1,5 @@
+import base64
+import json
 import logging
 import typing
 
@@ -52,8 +54,6 @@ async def chat_completions(
                     if url.startswith("data:"):
                         try:
                             _, b64_data = url.split(",", 1)
-                            import base64
-
                             raw_bytes = base64.b64decode(b64_data)
                             image_hash = cache.hash_image(b64_data)
                             cache.store(image_hash, raw_bytes)
@@ -83,6 +83,10 @@ async def chat_completions(
         else:
             platform = "openrouter"
             target_model = "google/gemini-2.0-flash-001"
+    elif (
+        settings.ollama_model and target_model == settings.ollama_model
+    ) or target_model == "qwen":
+        platform = "ollama"
 
     if has_images_in_latest:
         logger.info("Images detected, forcing gemini vision capability")
@@ -93,13 +97,12 @@ async def chat_completions(
     logger.info(f"Routing request to {platform} (model: {target_model})")
 
     async def sse_wrapper() -> typing.AsyncGenerator[bytes, None]:
-        import json
-
+        extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
         async for chunk in multiplexer.generate_stream(
             platform=platform,
             model=target_model,
             messages=payload_dict.get("messages", []),
-            **payload_dict.get("kwargs", {}),
+            **extra_kwargs,
         ):
             openai_chunk = {
                 "id": f"chatcmpl-{platform}",
