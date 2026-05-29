@@ -35,3 +35,6 @@ keys.json
 
 # Local DB
 nexus_llm_state.db
+
+# Tests
+e2e_out.log
