@@ -166,3 +166,20 @@ async def test_multiplexer_empty_stream(mock_get_client: MagicMock, mock_router:
     assert chunks == []
     assert mock_router.get_next_key.call_count == 1
     assert mock_router.mark_key_exhausted.call_count == 0
+
+
+@pytest.mark.asyncio
+@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+async def test_multiplexer_ollama_fast_path(
+    mock_get_client: MagicMock, mock_router: MagicMock
+) -> None:
+    mock_client = MagicMock()
+    mock_client.generate_stream.return_value = MockStreamGen(["Ollama", " is", " fast"])
+    mock_get_client.return_value = mock_client
+
+    multiplexer = Multiplexer(mock_router)
+    chunks = [c async for c in multiplexer.generate_stream("ollama", "qwen", [])]
+
+    assert chunks == ["Ollama", " is", " fast"]
+    # Fast path should not use the router keys
+    assert mock_router.get_next_key.call_count == 0

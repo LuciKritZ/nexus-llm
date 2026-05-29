@@ -34,6 +34,12 @@ class Multiplexer:
         Attempts to generate a stream. If the stream fails before yielding the first chunk,
         it hot-swaps to the next key. If all keys for the platform fail, falls back to Ollama.
         """
+        if platform == "ollama":
+            ollama_client = get_client_for_platform("ollama", "")
+            async for chunk in ollama_client.generate_stream(model, messages, **kwargs):
+                yield chunk
+            return
+
         max_retries = 3
         attempts = 0
 
