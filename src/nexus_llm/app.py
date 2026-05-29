@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
     router_core = RouterCore(db)
     gatekeeper = Gatekeeper(client)
-    multiplexer = Multiplexer(router_core)
+    multiplexer = Multiplexer(router_core, client)
 
     app.state.http_client = client
     app.state.unloader = unloader

@@ -103,7 +103,7 @@ async def test_multiplexer_fallback_to_ollama_on_exhaust(
     chunks = [c async for c in multiplexer.generate_stream("openrouter", "model", [])]
 
     assert chunks == ["ollama_chunk"]
-    mock_get_client.assert_called_once_with("ollama", "")
+    mock_get_client.assert_called_once_with("ollama", "", None)
     mock_router.mark_key_exhausted.assert_not_called()
 
 

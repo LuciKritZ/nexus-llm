@@ -73,8 +73,9 @@ class GeminiClient(BaseLLMClient):
         base_delay = 1.0
 
         for attempt in range(max_retries):
+            client_to_use = self.client or httpx.AsyncClient()
             try:
-                async with self.client.stream(
+                async with client_to_use.stream(
                     "POST",
                     url,
                     json=gemini_payload,
