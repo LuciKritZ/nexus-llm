@@ -10,5 +10,10 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str | None = None
 
+    sqlite_db_path: str = "nexus_llm_state.db"
+    keys_json_path: str = "keys.json"
+    default_cooldown_minutes: int = 60
+    image_token_reserve: int = 4096
+
 
 settings = Settings()

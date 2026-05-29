@@ -4,11 +4,15 @@
 # Documentation (ERD, Testing, Plan)
 .docs/
 
+# Cache
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
 .coverage
 htmlcov/
 .venv/
@@ -24,3 +28,7 @@ uv.lock
 .idea/
 .cursor/
 .logs/
+
+# Keys
+platforms.json
+keys.json

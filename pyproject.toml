@@ -5,6 +5,7 @@ description = "Local VRAM proxy for Ollama with Vision API offloading"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiosqlite>=0.20.0",
     "beautifulsoup4>=4.14.3",
     "fastapi>=0.136.3",
     "httpx>=0.28.1",
