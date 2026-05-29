@@ -62,10 +62,24 @@ async def chat_completions(
 
     if has_images_in_latest:
         logger.info("Routing request to Gemini (images detected in latest message)")
-        # Route to Gemini API
         payload_dict = payload.model_dump(exclude_none=True)
+
+        async def sse_wrapper() -> typing.AsyncGenerator[bytes, None]:
+            import json
+
+            async for chunk in gemini_client.generate_stream(
+                payload.model, payload_dict.get("messages", [])
+            ):
+                openai_chunk = {
+                    "id": "chatcmpl-gemini",
+                    "object": "chat.completion.chunk",
+                    "choices": [{"delta": {"content": chunk}}],
+                }
+                yield f"data: {json.dumps(openai_chunk)}\n\n".encode()
+            yield b"data: [DONE]\n\n"
+
         return StreamingResponse(
-            gemini_client.stream_generate_content(payload_dict),
+            sse_wrapper(),
             media_type="text/event-stream",
         )
 

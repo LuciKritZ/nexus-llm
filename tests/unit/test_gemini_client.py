@@ -1,16 +1,17 @@
 from collections.abc import AsyncGenerator
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 
-from nexus_llm.exceptions import GeminiAPIError
+from nexus_llm.exceptions import GeminiAPIError, QuotaExceededError, RateLimitError
 from nexus_llm.services.gemini_client import GeminiClient
 
 
 def test_convert_openai_to_gemini() -> None:
     client = GeminiClient(httpx.AsyncClient())
-    payload = {
+    payload: dict[str, Any] = {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "What is in this image?"},
@@ -54,7 +55,7 @@ def test_convert_openai_to_gemini() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stream_generate_content_success() -> None:
+async def test_generate_stream_success() -> None:
     mock_response = MagicMock()
     mock_response.status_code = 200
 
@@ -67,7 +68,6 @@ async def test_stream_generate_content_success() -> None:
 
     mock_response.aiter_lines = mock_aiter_lines
 
-    # stream() returns an async context manager
     mock_context = MagicMock()
     mock_context.__aenter__ = AsyncMock(return_value=mock_response)
     mock_context.__aexit__ = AsyncMock(return_value=None)
@@ -78,42 +78,24 @@ async def test_stream_generate_content_success() -> None:
     client = GeminiClient(mock_client)
 
     chunks = []
-    async for chunk in client.stream_generate_content({"messages": []}):
+    async for chunk in client.generate_stream("model-1", []):
         chunks.append(chunk)
 
-    assert len(chunks) == 3
-    assert b"chunk1" in chunks[0]
-    assert b"chunk2" in chunks[1]
-    assert chunks[2] == b"data: [DONE]\n\n"
+    assert len(chunks) == 2
+    assert chunks[0] == "chunk1"
+    assert chunks[1] == "chunk2"
     mock_client.stream.assert_called_once()
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
-async def test_stream_generate_content_retry_on_429(mock_sleep: AsyncMock) -> None:
-    # First response: 429
-    mock_response_429 = MagicMock()
-    mock_response_429.status_code = 429
+async def test_generate_stream_rate_limit() -> None:
+    # 429 should now raise RateLimitError immediately, skipping the HTTPStatusError retries
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.headers = {"retry-after": "120"}
 
-    request = httpx.Request("POST", "url")
-    error = httpx.HTTPStatusError(
-        "429 Too Many Requests", request=request, response=mock_response_429
-    )
-    mock_response_429.raise_for_status.side_effect = error
-
-    # Second response: 200 OK
-    mock_response_200 = MagicMock()
-    mock_response_200.status_code = 200
-
-    async def mock_aiter_lines() -> AsyncGenerator[str, None]:
-        yield 'data: {"candidates": [{"content": {"parts": [{"text": "success_chunk"}]}}]}'
-
-    mock_response_200.aiter_lines = mock_aiter_lines
-    mock_response_200.raise_for_status.return_value = None
-
-    # We need to simulate __aenter__ returning different responses sequentially
     mock_context = MagicMock()
-    mock_context.__aenter__ = AsyncMock(side_effect=[mock_response_429, mock_response_200])
+    mock_context.__aenter__ = AsyncMock(return_value=mock_response)
     mock_context.__aexit__ = AsyncMock(return_value=None)
 
     mock_client = MagicMock()
@@ -121,19 +103,61 @@ async def test_stream_generate_content_retry_on_429(mock_sleep: AsyncMock) -> No
 
     client = GeminiClient(mock_client)
 
-    chunks = []
-    async for chunk in client.stream_generate_content({"messages": []}):
-        chunks.append(chunk)
+    with pytest.raises(RateLimitError) as exc_info:
+        async for _ in client.generate_stream("model-1", []):
+            pass
 
-    assert len(chunks) == 1
-    assert b"success_chunk" in chunks[0]
-    assert mock_client.stream.call_count == 2
-    mock_sleep.assert_called_once_with(1.0)
+    assert exc_info.value.retry_after == 120.0
+    mock_client.stream.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_stream_rate_limit_invalid_reset() -> None:
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.headers = {"retry-after": "invalid-float"}
+
+    mock_context = MagicMock()
+    mock_context.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_context.__aexit__ = AsyncMock(return_value=None)
+
+    mock_client = MagicMock()
+    mock_client.stream.return_value = mock_context
+
+    client = GeminiClient(mock_client)
+
+    with pytest.raises(RateLimitError) as exc_info:
+        async for _ in client.generate_stream("model-1", []):
+            pass
+
+    assert exc_info.value.retry_after == 60.0
+    mock_client.stream.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_stream_quota_exceeded() -> None:
+    mock_response = MagicMock()
+    mock_response.status_code = 403
+
+    mock_context = MagicMock()
+    mock_context.__aenter__ = AsyncMock(return_value=mock_response)
+    mock_context.__aexit__ = AsyncMock(return_value=None)
+
+    mock_client = MagicMock()
+    mock_client.stream.return_value = mock_context
+
+    client = GeminiClient(mock_client)
+
+    with pytest.raises(QuotaExceededError):
+        async for _ in client.generate_stream("model-1", []):
+            pass
+
+    mock_client.stream.assert_called_once()
 
 
 @pytest.mark.asyncio
 @patch("nexus_llm.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
-async def test_stream_generate_content_max_retries(mock_sleep: AsyncMock) -> None:
+async def test_generate_stream_max_retries(mock_sleep: AsyncMock) -> None:
     mock_response_500 = MagicMock()
     mock_response_500.status_code = 500
 
@@ -151,7 +175,7 @@ async def test_stream_generate_content_max_retries(mock_sleep: AsyncMock) -> Non
     client = GeminiClient(mock_client)
 
     with pytest.raises(GeminiAPIError, match="Max retries reached"):
-        async for _ in client.stream_generate_content({"messages": []}):
+        async for _ in client.generate_stream("model-1", []):
             pass
 
     assert mock_client.stream.call_count == 3
@@ -159,17 +183,14 @@ async def test_stream_generate_content_max_retries(mock_sleep: AsyncMock) -> Non
 
 
 @pytest.mark.asyncio
-async def test_stream_generate_content_non_retryable_error() -> None:
+async def test_generate_stream_non_retryable_error() -> None:
     mock_response_400 = MagicMock()
-    mock_response_400.aread = AsyncMock()
     mock_response_400.status_code = 400
+    mock_response_400.headers = {}
 
     request = httpx.Request("POST", "url")
-    _ = httpx.HTTPStatusError("400 Bad Request", request=request, response=mock_response_400)
-
-    # raise_for_status() is not called for 400, but we raise GeminiAPIError manually
-    mock_response_400.raise_for_status.return_value = None
-    mock_response_400.aread.return_value = b"Bad payload"
+    error = httpx.HTTPStatusError("400 Bad Request", request=request, response=mock_response_400)
+    mock_response_400.raise_for_status.side_effect = error
 
     mock_context = MagicMock()
     mock_context.__aenter__ = AsyncMock(return_value=mock_response_400)
@@ -180,8 +201,12 @@ async def test_stream_generate_content_non_retryable_error() -> None:
 
     client = GeminiClient(mock_client)
 
-    with pytest.raises(GeminiAPIError, match="Gemini API returned 400: Bad payload"):
-        async for _ in client.stream_generate_content({"messages": []}):
+    # 400 isn't caught by the retry logic in `except httpx.HTTPStatusError as e`,
+    # but handle_error raises it using `raise_for_status()`, so it will bubble up
+    # However, GeminiClient's `except httpx.HTTPStatusError` raises `Unexpected HTTPStatusError`
+    # Let's verify that behavior.
+    with pytest.raises(GeminiAPIError, match="Unexpected HTTPStatusError: 400 Bad Request"):
+        async for _ in client.generate_stream("model-1", []):
             pass
 
     assert mock_client.stream.call_count == 1
@@ -189,12 +214,11 @@ async def test_stream_generate_content_non_retryable_error() -> None:
 
 @pytest.mark.asyncio
 @patch("nexus_llm.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
-async def test_stream_generate_content_request_error_retries(mock_sleep: AsyncMock) -> None:
+async def test_generate_stream_request_error_retries(mock_sleep: AsyncMock) -> None:
     request = httpx.Request("POST", "url")
     error = httpx.RequestError("Network unreachable", request=request)
 
     mock_context = MagicMock()
-    # Mocking __aenter__ to raise the RequestError, simulating stream() failing
     mock_context.__aenter__ = AsyncMock(side_effect=error)
     mock_context.__aexit__ = AsyncMock(return_value=None)
 
@@ -204,29 +228,8 @@ async def test_stream_generate_content_request_error_retries(mock_sleep: AsyncMo
     client = GeminiClient(mock_client)
 
     with pytest.raises(GeminiAPIError, match="Network error after 3 attempts"):
-        async for _ in client.stream_generate_content({"messages": []}):
+        async for _ in client.generate_stream("model-1", []):
             pass
 
     assert mock_client.stream.call_count == 3
     assert mock_sleep.call_count == 2
-
-
-@pytest.mark.asyncio
-async def test_stream_generate_content_unexpected_http_error() -> None:
-    request = httpx.Request("POST", "url")
-    mock_response = MagicMock()
-    mock_response.status_code = 403
-    error = httpx.HTTPStatusError("403 Forbidden", request=request, response=mock_response)
-
-    mock_context = MagicMock()
-    mock_context.__aenter__ = AsyncMock(side_effect=error)
-    mock_context.__aexit__ = AsyncMock(return_value=None)
-
-    mock_client = MagicMock()
-    mock_client.stream.return_value = mock_context
-
-    client = GeminiClient(mock_client)
-
-    with pytest.raises(GeminiAPIError, match="Unexpected HTTPStatusError: 403 Forbidden"):
-        async for _ in client.stream_generate_content({"messages": []}):
-            pass
