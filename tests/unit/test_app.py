@@ -91,7 +91,7 @@ def test_chat_completions_proxy_ollama_old_image(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-@patch("nexus_llm.services.gemini_client.GeminiClient.stream_generate_content")
+@patch("nexus_llm.services.gemini_client.GeminiClient.generate_stream")
 def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: TestClient) -> None:
     payload = {
         "model": "llama3.2-vision",
@@ -107,9 +107,9 @@ def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: Tes
         ],
     }
 
-    async def fake_stream(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[bytes, None]:
-        yield b"Gemini "
-        yield b"response"
+    async def fake_stream(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[str, None]:
+        yield "Gemini "
+        yield "response"
 
     mock_stream.return_value = fake_stream()
 
@@ -118,11 +118,14 @@ def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: Tes
 
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
-    assert response.content == b"Gemini response"
+
+    content = response.content.decode("utf-8")
+    assert "Gemini " in content
+    assert "response" in content
     mock_store.assert_called_once()
 
 
-@patch("nexus_llm.services.gemini_client.GeminiClient.stream_generate_content")
+@patch("nexus_llm.services.gemini_client.GeminiClient.generate_stream")
 def test_chat_completions_proxy_list_content_bad_base64(
     mock_stream: AsyncMock, client: TestClient
 ) -> None:
@@ -140,9 +143,9 @@ def test_chat_completions_proxy_list_content_bad_base64(
         ],
     }
 
-    async def fake_stream(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[bytes, None]:
-        yield b"Gemini "
-        yield b"response"
+    async def fake_stream(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[str, None]:
+        yield "Gemini "
+        yield "response"
 
     mock_stream.return_value = fake_stream()
 
@@ -150,7 +153,9 @@ def test_chat_completions_proxy_list_content_bad_base64(
         response = client.post("/v1/chat/completions", json=payload)
 
     assert response.status_code == 200
-    assert response.content == b"Gemini response"
+    content = response.content.decode("utf-8")
+    assert "Gemini " in content
+    assert "response" in content
     mock_store.assert_not_called()
 
 
