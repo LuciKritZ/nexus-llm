@@ -35,19 +35,34 @@ async def chat_completions(
 
     await unloader.unload_if_needed(payload.model)
 
-    # Image caching and context compression logic
+    # Determine target model and platform FIRST so we can pass it to compressor
+    platform = "openrouter"
+    target_model = payload.model
+    payload_dict_for_gatekeeper = payload.model_dump(exclude_none=True)
+
+    if payload.model == "nexus-auto" or payload.model == "auto":
+        complexity = await gatekeeper.classify(payload_dict_for_gatekeeper)
+        logger.info(f"Gatekeeper classified request as {complexity}")
+        if complexity == "complex":
+            platform = "openrouter"
+            target_model = "anthropic/claude-3-opus"
+        else:
+            platform = "openrouter"
+            target_model = "google/gemini-2.0-flash-001"
+    elif (
+        settings.ollama_model and target_model == settings.ollama_model
+    ) or target_model == "qwen":
+        platform = "ollama"
+
+    # Image caching
     has_images_in_latest = False
     latest_msg_index = len(payload.messages) - 1
     cached_hashes = {}
 
     for i, message in enumerate(payload.messages):
-        if isinstance(message.content, str):
-            message.content = compressor.compress_if_needed(message.content)
-        elif isinstance(message.content, list):
+        if isinstance(message.content, list):
             for part in message.content:
-                if part.type == "text" and part.text is not None:
-                    part.text = compressor.compress_if_needed(part.text)
-                elif part.type == "image_url" and part.image_url is not None:
+                if part.type == "image_url" and part.image_url is not None:
                     if i == latest_msg_index:
                         has_images_in_latest = True
                     url = part.image_url.url
@@ -68,30 +83,18 @@ async def chat_completions(
                         part.text = f"[Image: {image_hash}]"
                         part.image_url = None
 
-    payload_dict = payload.model_dump(exclude_none=True)
-
-    # Virtual configuration mapping
-    platform = "openrouter"
-    target_model = payload.model
-
-    if payload.model == "nexus-auto" or payload.model == "auto":
-        complexity = await gatekeeper.classify(payload_dict)
-        logger.info(f"Gatekeeper classified request as {complexity}")
-        if complexity == "complex":
-            platform = "openrouter"
-            target_model = "anthropic/claude-3-opus"
-        else:
-            platform = "openrouter"
-            target_model = "google/gemini-2.0-flash-001"
-    elif (
-        settings.ollama_model and target_model == settings.ollama_model
-    ) or target_model == "qwen":
-        platform = "ollama"
-
     if has_images_in_latest:
         logger.info("Images detected, forcing gemini vision capability")
         platform = "gemini"
         target_model = settings.gemini_model
+
+    # Compress the message history safely (truncates older messages to fit context limits)
+    payload.messages = compressor.compress_messages(
+        payload.messages, target_model, has_images_in_latest
+    )
+
+    # Dump the final payload to pass extra kwargs
+    payload_dict = payload.model_dump(exclude_none=True)
 
     # Use multiplexer for the actual request
     logger.info(f"Routing request to {platform} (model: {target_model})")
