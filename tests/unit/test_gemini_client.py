@@ -10,7 +10,7 @@ from nexus_llm.services.gemini_client import GeminiClient
 
 
 def test_convert_openai_to_gemini() -> None:
-    client = GeminiClient(httpx.AsyncClient())
+    client = GeminiClient(client=httpx.AsyncClient())
     payload: dict[str, Any] = {
         "messages": [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -75,7 +75,7 @@ async def test_generate_stream_success() -> None:
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     chunks = []
     async for chunk in client.generate_stream("model-1", []):
@@ -101,7 +101,7 @@ async def test_generate_stream_rate_limit() -> None:
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     with pytest.raises(RateLimitError) as exc_info:
         async for _ in client.generate_stream("model-1", []):
@@ -124,7 +124,7 @@ async def test_generate_stream_rate_limit_invalid_reset() -> None:
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     with pytest.raises(RateLimitError) as exc_info:
         async for _ in client.generate_stream("model-1", []):
@@ -146,7 +146,7 @@ async def test_generate_stream_quota_exceeded() -> None:
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     with pytest.raises(QuotaExceededError):
         async for _ in client.generate_stream("model-1", []):
@@ -172,7 +172,7 @@ async def test_generate_stream_max_retries(mock_sleep: AsyncMock) -> None:
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     with pytest.raises(GeminiAPIError, match="Max retries reached"):
         async for _ in client.generate_stream("model-1", []):
@@ -199,7 +199,7 @@ async def test_generate_stream_non_retryable_error() -> None:
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     # 400 isn't caught by the retry logic in `except httpx.HTTPStatusError as e`,
     # but handle_error raises it using `raise_for_status()`, so it will bubble up
@@ -225,7 +225,7 @@ async def test_generate_stream_request_error_retries(mock_sleep: AsyncMock) -> N
     mock_client = MagicMock()
     mock_client.stream.return_value = mock_context
 
-    client = GeminiClient(mock_client)
+    client = GeminiClient(client=mock_client)
 
     with pytest.raises(GeminiAPIError, match="Network error after 3 attempts"):
         async for _ in client.generate_stream("model-1", []):

@@ -32,3 +32,6 @@ uv.lock
 # Keys
 platforms.json
 keys.json
+
+# Local DB
+nexus_llm_state.db

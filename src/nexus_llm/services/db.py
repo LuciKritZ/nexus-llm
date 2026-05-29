@@ -15,4 +15,8 @@ async def init_db(db: aiosqlite.Connection) -> None:
             meta TEXT
         );
     """)
+    await db.execute("""
+        CREATE INDEX IF NOT EXISTS idx_platform_priority_last_used
+        ON api_keys (platform, priority DESC, last_used_at ASC);
+    """)
     await db.commit()

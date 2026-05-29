@@ -11,9 +11,12 @@ from nexus_llm.exceptions import QuotaExceededError, RateLimitError
 class BaseLLMClient(abc.ABC):
     """Abstract base class for all LLM provider adapters."""
 
-    def __init__(self, api_key: str, base_url: str = "") -> None:
+    def __init__(
+        self, api_key: str, base_url: str = "", client: httpx.AsyncClient | None = None
+    ) -> None:
         self.api_key = api_key
         self.base_url = base_url
+        self.client = client
 
     @abc.abstractmethod
     async def generate_stream(
@@ -52,12 +55,10 @@ class OpenAICompatibleClient(BaseLLMClient):
             **kwargs,
         }
 
-        async with (
-            httpx.AsyncClient() as client,
-            client.stream(
-                "POST", f"{self.base_url}/v1/chat/completions", headers=headers, json=payload
-            ) as response,
-        ):
+        client_to_use = self.client or httpx.AsyncClient()
+        async with client_to_use.stream(
+            "POST", f"{self.base_url}/v1/chat/completions", headers=headers, json=payload
+        ) as response:
             if response.status_code != 200:
                 self.handle_error(response)
 
