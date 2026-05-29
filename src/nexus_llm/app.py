@@ -1,6 +1,7 @@
 import typing
 from contextlib import asynccontextmanager
 
+import aiosqlite
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -10,7 +11,12 @@ from nexus_llm.exceptions import CacheError, GeminiAPIError, NexusLLMError
 from nexus_llm.routes.proxy import router as proxy_router
 from nexus_llm.services.cache import ImageCache
 from nexus_llm.services.compressor import ContextCompressor
+from nexus_llm.services.db import init_db
+from nexus_llm.services.gatekeeper import Gatekeeper
 from nexus_llm.services.gemini_client import GeminiClient
+from nexus_llm.services.multiplexer import Multiplexer
+from nexus_llm.services.router_core import RouterCore
+from nexus_llm.services.sync import sync_keys_from_json
 from nexus_llm.services.unloader import ModelUnloader
 
 
@@ -20,17 +26,30 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     unloader = ModelUnloader(ollama_url=settings.ollama_base_url, http_client=client)
     compressor = ContextCompressor()
     cache = ImageCache()
-    gemini_client = GeminiClient(client)
+    gemini_client = GeminiClient(client=client)
+
+    db = await aiosqlite.connect(settings.sqlite_db_path)
+    await init_db(db)
+    await sync_keys_from_json(db, settings.keys_json_path)
+
+    router_core = RouterCore(db)
+    gatekeeper = Gatekeeper(client)
+    multiplexer = Multiplexer(router_core)
 
     app.state.http_client = client
     app.state.unloader = unloader
     app.state.compressor = compressor
     app.state.cache = cache
     app.state.gemini_client = gemini_client
+    app.state.db = db
+    app.state.router_core = router_core
+    app.state.gatekeeper = gatekeeper
+    app.state.multiplexer = multiplexer
 
     yield
 
     await client.aclose()
+    await db.close()
 
 
 def create_app() -> FastAPI:

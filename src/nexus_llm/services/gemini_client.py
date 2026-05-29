@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 class GeminiClient(BaseLLMClient):
     """Client for interacting with the Google Gemini API."""
 
-    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(self, api_key: str | None = None, client: httpx.AsyncClient | None = None) -> None:
         super().__init__(
-            api_key=settings.gemini_api_key or "",
+            api_key=api_key or settings.gemini_api_key or "",
             base_url="https://generativelanguage.googleapis.com",
         )
         self.client = client or httpx.AsyncClient()

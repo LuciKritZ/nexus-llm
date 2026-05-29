@@ -14,24 +14,15 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
     # Mock httpx.AsyncClient.send to return a fake StreamingResponse
     req = httpx.Request("POST", "http://127.0.0.1:11434/v1/chat/completions")
 
-    async def mock_aiter_bytes() -> AsyncGenerator[bytes, None]:
-        yield (
-            b'{"id":"chatcmpl-123","object":"chat.completion.chunk",'
-            b'"choices":[{"delta":{"content":"Hello"}}]}'
-        )
-        yield (
-            b'{"id":"chatcmpl-123","object":"chat.completion.chunk",'
-            b'"choices":[{"delta":{"content":" World"}}]}'
-        )
+    async def mock_generate_stream(
+        *args: typing.Any, **kwargs: typing.Any
+    ) -> AsyncGenerator[str, None]:
+        yield "Hello"
+        yield " World"
 
-    mock_response = httpx.Response(
-        status_code=200, request=req, headers={"content-type": "text/event-stream"}
+    monkeypatch.setattr(
+        "nexus_llm.services.multiplexer.Multiplexer.generate_stream", mock_generate_stream
     )
-    # We must mock aiter_bytes on the response instance
-    mock_response.aiter_bytes = mock_aiter_bytes  # type: ignore
-
-    mock_send = AsyncMock(return_value=mock_response)
-    monkeypatch.setattr(httpx.AsyncClient, "send", mock_send)
 
     # We also need to mock post for the unloader
     mock_post_response = httpx.Response(status_code=200, request=req, json={"status": "success"})
@@ -91,8 +82,7 @@ def test_chat_completions_proxy_ollama_old_image(client: TestClient) -> None:
     assert response.status_code == 200
 
 
-@patch("nexus_llm.services.gemini_client.GeminiClient.generate_stream")
-def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: TestClient) -> None:
+def test_chat_completions_proxy_list_content(client: TestClient) -> None:
     payload = {
         "model": "llama3.2-vision",
         "messages": [
@@ -107,12 +97,6 @@ def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: Tes
         ],
     }
 
-    async def fake_stream(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[str, None]:
-        yield "Gemini "
-        yield "response"
-
-    mock_stream.return_value = fake_stream()
-
     with patch("nexus_llm.services.cache.ImageCache.store") as mock_store:
         response = client.post("/v1/chat/completions", json=payload)
 
@@ -120,15 +104,12 @@ def test_chat_completions_proxy_list_content(mock_stream: AsyncMock, client: Tes
     assert "text/event-stream" in response.headers["content-type"]
 
     content = response.content.decode("utf-8")
-    assert "Gemini " in content
-    assert "response" in content
+    assert "Hello" in content
+    assert " World" in content
     mock_store.assert_called_once()
 
 
-@patch("nexus_llm.services.gemini_client.GeminiClient.generate_stream")
-def test_chat_completions_proxy_list_content_bad_base64(
-    mock_stream: AsyncMock, client: TestClient
-) -> None:
+def test_chat_completions_proxy_list_content_bad_base64(client: TestClient) -> None:
     payload = {
         "model": "llama3.2-vision",
         "messages": [
@@ -143,20 +124,38 @@ def test_chat_completions_proxy_list_content_bad_base64(
         ],
     }
 
-    async def fake_stream(*args: typing.Any, **kwargs: typing.Any) -> AsyncGenerator[str, None]:
-        yield "Gemini "
-        yield "response"
-
-    mock_stream.return_value = fake_stream()
-
     with patch("nexus_llm.services.cache.ImageCache.store") as mock_store:
         response = client.post("/v1/chat/completions", json=payload)
 
     assert response.status_code == 200
     content = response.content.decode("utf-8")
-    assert "Gemini " in content
-    assert "response" in content
+    assert "Hello" in content
+    assert " World" in content
     mock_store.assert_not_called()
+
+
+@patch("nexus_llm.routes.proxy.settings")
+@patch("nexus_llm.services.gatekeeper.Gatekeeper.classify")
+def test_chat_completions_proxy_nexus_auto(
+    mock_classify: AsyncMock, mock_settings: typing.Any, client: TestClient
+) -> None:
+    mock_settings.ollama_model = None
+    mock_classify.return_value = "complex"
+    payload = {
+        "model": "nexus-auto",
+        "messages": [{"role": "user", "content": "Complex query"}],
+    }
+
+    response = client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 200
+    mock_classify.assert_called_once()
+
+    # test simple routing
+    mock_classify.reset_mock()
+    mock_classify.return_value = "simple"
+    response = client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 200
+    mock_classify.assert_called_once()
 
 
 def test_exception_handlers(client: TestClient) -> None:
