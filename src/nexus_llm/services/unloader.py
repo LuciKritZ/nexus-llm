@@ -56,8 +56,13 @@ class ModelUnloader:
                 file=sys.stderr,
             )
 
-            response = await self._http_client.post(url, json=payload)
-            response.raise_for_status()
+            try:
+                response = await self._http_client.post(url, json=payload)
+                response.raise_for_status()
+            except httpx.HTTPError as e:
+                print(
+                    f"Warning: Failed to unload model '{self._active_model}': {e}", file=sys.stderr
+                )
 
             self._active_model = target_model
             return True

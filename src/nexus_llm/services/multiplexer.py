@@ -29,6 +29,12 @@ def get_client_for_platform(
         return OpenAICompatibleClient(
             api_key="ollama", base_url=api_base or "http://127.0.0.1:11434", client=http_client
         )
+    elif platform == "groq":
+        return OpenAICompatibleClient(
+            api_key=api_key,
+            base_url=api_base or "https://api.groq.com/openai",
+            client=http_client,
+        )
     else:
         raise ValueError(f"Unknown platform: {platform}")
 

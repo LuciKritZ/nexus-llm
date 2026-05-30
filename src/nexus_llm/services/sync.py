@@ -14,6 +14,9 @@ async def sync_keys_from_json(db: aiosqlite.Connection, json_path: str) -> None:
 
     platforms = data.get("platforms", {})
 
+    # Clear existing keys to ensure no residual/deleted keys persist
+    await db.execute("DELETE FROM api_keys")
+
     for platform, keys in platforms.items():
         for key_obj in keys:
             key_value = key_obj.get("key_value")

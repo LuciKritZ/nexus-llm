@@ -55,10 +55,10 @@ async def test_unloader_sends_correct_payload(mock_client: AsyncMock) -> None:
     mock_response = httpx.Response(200, json={"status": "success"}, request=req)
     mock_client.post.return_value = mock_response
 
-    unloaded = await engine.unload_if_needed("llama3.2-vision")
+    unloaded = await engine.unload_if_needed("test-target-model")
 
     assert unloaded
-    assert engine._active_model == "llama3.2-vision"
+    assert engine._active_model == "test-target-model"
     mock_client.post.assert_called_once_with(
         "http://127.0.0.1:11434/api/generate",
         json={"model": "qwen3.5:9b-mlx", "keep_alive": 0},
@@ -85,13 +85,13 @@ async def test_concurrent_requests_dont_double_unload(mock_client: AsyncMock) ->
     mock_client.post.side_effect = delayed_post
 
     results = await asyncio.gather(
-        engine.unload_if_needed("llama3.2-vision"),
-        engine.unload_if_needed("llama3.2-vision"),
-        engine.unload_if_needed("llama3.2-vision"),
+        engine.unload_if_needed("test-target-model"),
+        engine.unload_if_needed("test-target-model"),
+        engine.unload_if_needed("test-target-model"),
     )
 
     assert sum(1 for r in results if r) == 1
-    assert engine._active_model == "llama3.2-vision"
+    assert engine._active_model == "test-target-model"
     assert mock_client.post.call_count == 1
 
 
@@ -102,5 +102,7 @@ async def test_unloader_error_handling(mock_client: AsyncMock) -> None:
 
     mock_client.post.side_effect = httpx.RequestError("Connection failed")
 
-    with pytest.raises(httpx.RequestError):
-        await engine.unload_if_needed("llama3.2-vision")
+    result = await engine.unload_if_needed("test-target-model")
+
+    assert result is True
+    assert engine._active_model == "test-target-model"
