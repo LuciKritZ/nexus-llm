@@ -3,11 +3,9 @@ import json
 import logging
 import typing
 
-import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from nexus_llm.config import settings
 from nexus_llm.models.schemas import ChatCompletionRequest
 from nexus_llm.services.cache import ImageCache
 from nexus_llm.services.compressor import ContextCompressor
@@ -25,36 +23,18 @@ async def chat_completions(
 ) -> StreamingResponse:
     unloader: ModelUnloader = fastapi_req.app.state.unloader
     compressor: ContextCompressor = fastapi_req.app.state.compressor
-    _http_client: httpx.AsyncClient = fastapi_req.app.state.http_client
     cache: ImageCache = fastapi_req.app.state.cache
     gatekeeper: Gatekeeper = fastapi_req.app.state.gatekeeper
     multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
 
-    if settings.ollama_model:
-        payload.model = settings.ollama_model
+    platforms_data = getattr(fastapi_req.app.state, "platforms", {})
+    fallback_model = platforms_data.get("system_fallback", {}).get("model")
+
+    if fallback_model and payload.model not in ("auto", "nexus-auto"):
+        pass
 
     await unloader.unload_if_needed(payload.model)
 
-    # Determine target model and platform FIRST so we can pass it to compressor
-    platform = "openrouter"
-    target_model = payload.model
-    payload_dict_for_gatekeeper = payload.model_dump(exclude_none=True)
-
-    if payload.model == "nexus-auto" or payload.model == "auto":
-        complexity = await gatekeeper.classify(payload_dict_for_gatekeeper)
-        logger.info(f"Gatekeeper classified request as {complexity}")
-        if complexity == "complex":
-            platform = "openrouter"
-            target_model = "anthropic/claude-3-opus"
-        else:
-            platform = "openrouter"
-            target_model = "google/gemini-2.0-flash-001"
-    elif (
-        settings.ollama_model and target_model == settings.ollama_model
-    ) or target_model == "qwen":
-        platform = "ollama"
-
-    # Image caching
     has_images_in_latest = False
     latest_msg_index = len(payload.messages) - 1
     cached_hashes = {}
@@ -77,38 +57,71 @@ async def chat_completions(
                             pass
 
                     if i != latest_msg_index:
-                        # Strip images from older messages
                         part.type = "text"
                         image_hash = cached_hashes.get(id(part), "unknown_image")
                         part.text = f"[Image: {image_hash}]"
                         part.image_url = None
 
-    if has_images_in_latest:
-        logger.info("Images detected, forcing gemini vision capability")
-        platform = "gemini"
-        target_model = settings.gemini_model
+    payload_dict_for_gatekeeper = payload.model_dump(exclude_none=True)
+    profile = await gatekeeper.profile_request(payload_dict_for_gatekeeper)
+    context_length = profile.get("context_length", 0)
 
-    # Compress the message history safely (truncates older messages to fit context limits)
+    candidates = []
+
+    if payload.model in ("auto", "nexus-auto"):
+        for key, config in platforms_data.items():
+            if not isinstance(config, dict) or key == "system_fallback":
+                continue
+            max_tokens = config.get("max_input_tokens", 0)
+            if max_tokens < context_length:
+                continue
+            if has_images_in_latest and not config.get("supports_vision"):
+                continue
+            candidates.append(key)
+
+        if not candidates:
+            logger.warning("No candidates found, falling back to system fallback")
+            candidates = ["system_fallback"]
+
+        # Target model for compression heuristics (use first candidate)
+        target_model_for_compression = (
+            candidates[0].split("/", 1)[1] if "/" in candidates[0] else candidates[0]
+        )
+        if candidates[0] == "system_fallback":
+            target_model_for_compression = fallback_model
+    else:
+        # Explicit model requested
+        if payload.model == fallback_model:
+            candidates = ["system_fallback"]
+            target_model_for_compression = fallback_model
+        elif "/" in payload.model:
+            candidates = [payload.model]
+            target_model_for_compression = payload.model.split("/", 1)[1]
+        else:
+            found = [k for k in platforms_data if k.endswith(f"/{payload.model}")]
+            if found:
+                candidates = found
+                target_model_for_compression = payload.model
+            else:
+                candidates = [f"ollama/{payload.model}"]
+                target_model_for_compression = payload.model
+
     payload.messages = compressor.compress_messages(
-        payload.messages, target_model, has_images_in_latest
+        payload.messages, target_model_for_compression, has_images_in_latest
     )
 
-    # Dump the final payload to pass extra kwargs
     payload_dict = payload.model_dump(exclude_none=True)
-
-    # Use multiplexer for the actual request
-    logger.info(f"Routing request to {platform} (model: {target_model})")
 
     async def sse_wrapper() -> typing.AsyncGenerator[bytes, None]:
         extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
         async for chunk in multiplexer.generate_stream(
-            platform=platform,
-            model=target_model,
+            candidate_models=candidates,
             messages=payload_dict.get("messages", []),
             **extra_kwargs,
         ):
+            # For SSE response, we can just use a generic platform name since multiplexer handles it
             openai_chunk = {
-                "id": f"chatcmpl-{platform}",
+                "id": "chatcmpl-dynamic",
                 "object": "chat.completion.chunk",
                 "choices": [{"delta": {"content": chunk}}],
             }

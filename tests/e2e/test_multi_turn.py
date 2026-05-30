@@ -48,7 +48,7 @@ async def e2e_app(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[httpx.Async
     async def mock_send(
         self: httpx.AsyncClient, request: httpx.Request, **kwargs: typing.Any
     ) -> Response:
-        print(f"\n[mock_send] URL: {request.url}")
+        print(f"\\n[mock_send] URL: {request.url}")
         if "gemini" in str(request.url):
             print(f"[mock_send] Gemini call with auth: {request.headers.get('x-goog-api-key')}")
             res = await transport.handle_async_request(request)
@@ -62,6 +62,12 @@ async def e2e_app(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[httpx.Async
 
     # Trigger lifespan explicitly
     async with lifespan(app):
+        # Inject our mock model after lifespan loads platforms.json
+        app.state.platforms["gemini/gemini-1.5-pro"] = {
+            "max_input_tokens": 100000,
+            "supports_vision": True,
+        }
+
         from nexus_llm.config import settings
 
         # Connect to the DB to insert 2 gemini keys

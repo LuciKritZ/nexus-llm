@@ -113,6 +113,72 @@ class RouterCore:
             finally:
                 await self.mark_key_used(key_hash)
 
+    async def get_best_platform_and_key(
+        self, candidate_platforms: list[str]
+    ) -> tuple[str, dict[str, Any]]:
+        """
+        Retrieves the best available platform and key from a list of candidates.
+        Prioritizes highest `priority`, then oldest `last_used_at`.
+        """
+        now = datetime.datetime.now(datetime.UTC).timestamp()
+
+        if not candidate_platforms:
+            raise NoKeysAvailableError("No candidate platforms provided for dynamic routing")
+
+        placeholders = ",".join("?" for _ in candidate_platforms)
+        query = f"""
+            SELECT platform, key_hash, key_value, priority, try_after, last_used_at, meta
+            FROM api_keys
+            WHERE platform IN ({placeholders})
+            ORDER BY priority DESC, last_used_at ASC
+        """
+
+        async with self.db.execute(query, candidate_platforms) as cursor:
+            rows = await cursor.fetchall()
+
+        if not rows:
+            raise NoKeysAvailableError(
+                f"No keys configured for candidate platforms: {candidate_platforms}"
+            )
+
+        for row in rows:
+            platform, key_hash, key_value, _priority, try_after, _, meta = row
+
+            # Check in-memory fast path cooldown
+            if key_hash in self._cooldowns and self._cooldowns[key_hash] > now:
+                continue
+
+            # DB level cooldown check
+            if try_after:
+                try_after_ts = datetime.datetime.fromisoformat(try_after).timestamp()
+                if try_after_ts > now:
+                    self._cooldowns[key_hash] = try_after_ts
+                    continue
+                else:
+                    # Cooldown expired, clear it
+                    self._cooldowns.pop(key_hash, None)
+                    await self.db.execute(
+                        "UPDATE api_keys SET try_after = NULL WHERE key_hash = ?", (key_hash,)
+                    )
+                    await self.db.commit()
+
+            # Not in cooldown, update last_used_at and return
+            await self.db.execute(
+                "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE key_hash = ?",
+                (key_hash,),
+            )
+            await self.db.commit()
+
+            return platform, {
+                "key_hash": key_hash,
+                "key_value": key_value,
+                "meta": meta,
+            }
+
+        raise NoKeysAvailableError(
+            f"All keys for candidate platforms {candidate_platforms} are in cooldown."
+        )
+
     async def mark_key_exhausted(self, key_hash: str, duration_seconds: float) -> None:
         """Puts a key in cooldown for a specified duration."""
         now = datetime.datetime.now(datetime.UTC)

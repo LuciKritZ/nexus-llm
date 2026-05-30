@@ -30,7 +30,6 @@ class MockStreamGen:
 def mock_router() -> MagicMock:
     router = MagicMock()
 
-    # Mock the async context manager use_key
     class MockContextManager:
         async def __aenter__(self) -> None:
             pass
@@ -39,7 +38,7 @@ def mock_router() -> MagicMock:
             pass
 
     router.use_key.return_value = MockContextManager()
-    router.get_next_key = AsyncMock()
+    router.get_best_platform_and_key = AsyncMock()
     router.mark_key_exhausted = AsyncMock()
     return router
 
@@ -47,17 +46,20 @@ def mock_router() -> MagicMock:
 @pytest.mark.asyncio
 @patch("nexus_llm.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_success(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
-    mock_router.get_next_key.return_value = {"key_hash": "h1", "key_value": "v1"}
+    mock_router.get_best_platform_and_key.return_value = (
+        "openrouter",
+        {"key_hash": "h1", "key_value": "v1"},
+    )
 
     mock_client = MagicMock()
     mock_client.generate_stream.return_value = MockStreamGen(["chunk1", "chunk2"])
     mock_get_client.return_value = mock_client
 
     multiplexer = Multiplexer(mock_router)
-    chunks = [c async for c in multiplexer.generate_stream("openrouter", "model", [])]
+    chunks = [c async for c in multiplexer.generate_stream(["openrouter/model"], [])]
 
     assert chunks == ["chunk1", "chunk2"]
-    mock_router.get_next_key.assert_called_once_with("openrouter")
+    mock_router.get_best_platform_and_key.assert_called_once_with(["openrouter"])
     mock_router.mark_key_exhausted.assert_not_called()
 
 
@@ -66,10 +68,9 @@ async def test_multiplexer_success(mock_get_client: MagicMock, mock_router: Magi
 async def test_multiplexer_hot_swap_on_error(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
-    # First key fails, second key succeeds
-    mock_router.get_next_key.side_effect = [
-        {"key_hash": "h1", "key_value": "v1"},
-        {"key_hash": "h2", "key_value": "v2"},
+    mock_router.get_best_platform_and_key.side_effect = [
+        ("openrouter", {"key_hash": "h1", "key_value": "v1"}),
+        ("openrouter", {"key_hash": "h2", "key_value": "v2"}),
     ]
 
     client1 = MagicMock()
@@ -81,10 +82,10 @@ async def test_multiplexer_hot_swap_on_error(
     mock_get_client.side_effect = [client1, client2]
 
     multiplexer = Multiplexer(mock_router)
-    chunks = [c async for c in multiplexer.generate_stream("openrouter", "model", [])]
+    chunks = [c async for c in multiplexer.generate_stream(["openrouter/model"], [])]
 
     assert chunks == ["success_chunk"]
-    assert mock_router.get_next_key.call_count == 2
+    assert mock_router.get_best_platform_and_key.call_count == 2
     mock_router.mark_key_exhausted.assert_called_once_with("h1", 30.0)
 
 
@@ -93,17 +94,17 @@ async def test_multiplexer_hot_swap_on_error(
 async def test_multiplexer_fallback_to_ollama_on_exhaust(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
-    mock_router.get_next_key.side_effect = NoKeysAvailableError("No keys")
+    mock_router.get_best_platform_and_key.side_effect = NoKeysAvailableError("No keys")
 
     ollama_client = MagicMock()
     ollama_client.generate_stream.return_value = MockStreamGen(["ollama_chunk"])
     mock_get_client.return_value = ollama_client
 
     multiplexer = Multiplexer(mock_router)
-    chunks = [c async for c in multiplexer.generate_stream("openrouter", "model", [])]
+    chunks = [c async for c in multiplexer.generate_stream(["openrouter/model"], [])]
 
     assert chunks == ["ollama_chunk"]
-    mock_get_client.assert_called_once_with("ollama", "", None)
+    mock_get_client.assert_called_once_with("ollama", "", None, "http://127.0.0.1:11434")
     mock_router.mark_key_exhausted.assert_not_called()
 
 
@@ -112,7 +113,10 @@ async def test_multiplexer_fallback_to_ollama_on_exhaust(
 async def test_multiplexer_fallback_to_ollama_after_max_retries(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
-    mock_router.get_next_key.return_value = {"key_hash": "h1", "key_value": "v1"}
+    mock_router.get_best_platform_and_key.return_value = (
+        "openrouter",
+        {"key_hash": "h1", "key_value": "v1"},
+    )
 
     # 3 attempts fail
     client_fail = MagicMock()
@@ -128,7 +132,7 @@ async def test_multiplexer_fallback_to_ollama_after_max_retries(
     mock_get_client.side_effect = [client_fail, client_fail, client_fail, ollama_client]
 
     multiplexer = Multiplexer(mock_router)
-    chunks = [c async for c in multiplexer.generate_stream("openrouter", "model", [])]
+    chunks = [c async for c in multiplexer.generate_stream(["openrouter/model"], [])]
 
     assert chunks == ["ollama_fallback"]
 
@@ -154,18 +158,43 @@ def test_get_client_for_platform() -> None:
 @pytest.mark.asyncio
 @patch("nexus_llm.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_empty_stream(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
-    mock_router.get_next_key.return_value = {"key_hash": "h1", "key_value": "v1"}
+    mock_router.get_best_platform_and_key.return_value = (
+        "openrouter",
+        {"key_hash": "h1", "key_value": "v1"},
+    )
 
     mock_client = MagicMock()
     mock_client.generate_stream.return_value = MockStreamGen([])
     mock_get_client.return_value = mock_client
 
     multiplexer = Multiplexer(mock_router)
-    chunks = [c async for c in multiplexer.generate_stream("openrouter", "model", [])]
+    chunks = [c async for c in multiplexer.generate_stream(["openrouter/model"], [])]
 
     assert chunks == []
-    assert mock_router.get_next_key.call_count == 1
+    assert mock_router.get_best_platform_and_key.call_count == 1
     assert mock_router.mark_key_exhausted.call_count == 0
+
+
+@pytest.mark.asyncio
+@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+async def test_multiplexer_system_fallback(
+    mock_get_client: MagicMock, mock_router: MagicMock
+) -> None:
+    mock_client = MagicMock()
+    mock_client.generate_stream.return_value = MockStreamGen(["Fallback", " works"])
+    mock_get_client.return_value = mock_client
+
+    multiplexer = Multiplexer(
+        mock_router,
+        platforms_data={
+            "system_fallback": {"model": "fallback-model", "apiBase": "http://fallback:11434"}
+        },
+    )
+    chunks = [c async for c in multiplexer.generate_stream(["system_fallback"], [])]
+
+    assert chunks == ["Fallback", " works"]
+    mock_get_client.assert_called_once_with("ollama", "", None, "http://fallback:11434")
+    assert mock_router.get_best_platform_and_key.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -178,8 +207,7 @@ async def test_multiplexer_ollama_fast_path(
     mock_get_client.return_value = mock_client
 
     multiplexer = Multiplexer(mock_router)
-    chunks = [c async for c in multiplexer.generate_stream("ollama", "qwen", [])]
+    chunks = [c async for c in multiplexer.generate_stream(["ollama/qwen"], [])]
 
     assert chunks == ["Ollama", " is", " fast"]
-    # Fast path should not use the router keys
-    assert mock_router.get_next_key.call_count == 0
+    assert mock_router.get_best_platform_and_key.call_count == 0
