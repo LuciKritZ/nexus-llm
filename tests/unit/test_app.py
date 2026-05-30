@@ -139,6 +139,12 @@ def test_chat_completions_proxy_nexus_auto(mock_profile: AsyncMock, client: Test
 
 @patch("nexus_llm.services.gatekeeper.Gatekeeper.profile_request")
 def test_chat_completions_proxy_coverage(mock_profile: AsyncMock, client: TestClient) -> None:
+    app = typing.cast(typing.Any, client.app)
+    app.state.platforms = {
+        "gemini": {"max_input_tokens": 1000, "supports_vision": True},
+        "ollama": {"max_input_tokens": 100, "supports_vision": False},
+        "system_fallback": {"model": "llama3"},
+    }
     # 1. auto with context too large, triggers fallback because no candidates
     mock_profile.return_value = {"context_length": 99999999, "has_image": False}
     response = client.post("/v1/chat/completions", json={"model": "auto", "messages": []})
@@ -163,11 +169,7 @@ def test_chat_completions_proxy_coverage(mock_profile: AsyncMock, client: TestCl
     assert response.status_code == 200
 
     # 3. Explicit fallback_model
-    app = typing.cast(typing.Any, client.app)
-    # mock fallback
-    app.state.platforms = {"system_fallback": {"model": "llama3"}}
     fallback_model = "llama3"
-
     # Hit line 34 (fallback_model present and explicitly requested)
     response = client.post("/v1/chat/completions", json={"model": fallback_model, "messages": []})
     assert response.status_code == 200
