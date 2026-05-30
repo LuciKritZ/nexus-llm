@@ -1,5 +1,6 @@
 import asyncio
 import sys
+from typing import Any
 
 import httpx
 
@@ -7,8 +8,10 @@ import httpx
 class ModelUnloader:
     """Tracks the active model in Ollama VRAM and handles unloading on model switch."""
 
-    def __init__(self, ollama_url: str, http_client: httpx.AsyncClient) -> None:
-        self.ollama_url = ollama_url.rstrip("/")
+    def __init__(
+        self, http_client: httpx.AsyncClient, platforms_data: dict[str, Any] | None = None
+    ) -> None:
+        self.platforms_data = platforms_data or {}
         self._http_client = http_client
         self._active_model: str | None = None
         self._lock = asyncio.Lock()
@@ -40,7 +43,9 @@ class ModelUnloader:
                 self._active_model = target_model
                 return False
 
-            url = f"{self.ollama_url}/api/generate"
+            ollama_info = self.platforms_data.get("system_fallback", {})
+            ollama_url = ollama_info.get("apiBase", "http://127.0.0.1:11434").rstrip("/")
+            url = f"{ollama_url}/api/generate"
             payload = {
                 "model": self._active_model,
                 "keep_alive": 0,

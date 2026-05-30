@@ -22,8 +22,20 @@ from nexus_llm.services.unloader import ModelUnloader
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
+    import json
+    from pathlib import Path
+
+    platforms_data = {}
+    platforms_path = Path("platforms.json")
+    if platforms_path.exists():
+        try:
+            with open(platforms_path, encoding="utf-8") as f:
+                platforms_data = json.load(f)
+        except Exception:  # pragma: no cover
+            pass
+
     client = httpx.AsyncClient(timeout=300.0)
-    unloader = ModelUnloader(ollama_url=settings.ollama_base_url, http_client=client)
+    unloader = ModelUnloader(http_client=client, platforms_data=platforms_data)
     compressor = ContextCompressor()
     cache = ImageCache()
     gemini_client = GeminiClient(client=client)
@@ -33,8 +45,8 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     await sync_keys_from_json(db, settings.keys_json_path)
 
     router_core = RouterCore(db)
-    gatekeeper = Gatekeeper(client)
-    multiplexer = Multiplexer(router_core, client)
+    gatekeeper = Gatekeeper(client, platforms_data)
+    multiplexer = Multiplexer(router_core, client, platforms_data)
 
     app.state.http_client = client
     app.state.unloader = unloader
@@ -45,6 +57,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     app.state.router_core = router_core
     app.state.gatekeeper = gatekeeper
     app.state.multiplexer = multiplexer
+    app.state.platforms = platforms_data
 
     yield
 

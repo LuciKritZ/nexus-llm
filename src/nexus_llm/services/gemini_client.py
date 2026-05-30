@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 
-from nexus_llm.config import settings
 from nexus_llm.exceptions import GeminiAPIError, QuotaExceededError, RateLimitError
 from nexus_llm.services.adapters import BaseLLMClient
 
@@ -18,7 +17,7 @@ class GeminiClient(BaseLLMClient):
 
     def __init__(self, api_key: str | None = None, client: httpx.AsyncClient | None = None) -> None:
         super().__init__(
-            api_key=api_key or settings.gemini_api_key or "",
+            api_key=api_key or "",
             base_url="https://generativelanguage.googleapis.com",
         )
         self.client = client or httpx.AsyncClient()
@@ -64,7 +63,7 @@ class GeminiClient(BaseLLMClient):
         """Sends the payload to Gemini and yields text content, with retry logic."""
         payload = {"messages": messages, **kwargs}
         gemini_payload = self._convert_openai_to_gemini(payload)
-        url = f"{self.base_url}/v1beta/models/{settings.gemini_model}:streamGenerateContent"
+        url = f"{self.base_url}/v1beta/models/{model}:streamGenerateContent"
 
         headers = {"x-goog-api-key": self.api_key}
         params = {"alt": "sse"}

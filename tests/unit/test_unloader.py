@@ -17,7 +17,7 @@ def mock_client() -> AsyncMock:
 
 async def test_unloader_skipped_on_first_request(mock_client: AsyncMock) -> None:
     """The first request should skip unloading since no model is currently loaded."""
-    engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
+    engine = ModelUnloader(http_client=mock_client)
 
     unloaded = await engine.unload_if_needed("qwen3.5:9b-mlx")
 
@@ -28,7 +28,7 @@ async def test_unloader_skipped_on_first_request(mock_client: AsyncMock) -> None
 
 async def test_unloader_skipped_when_same_model_requested(mock_client: AsyncMock) -> None:
     """Requesting the active model should skip unloading."""
-    engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
+    engine = ModelUnloader(http_client=mock_client)
     engine._active_model = "qwen3.5:9b-mlx"
 
     unloaded = await engine.unload_if_needed("qwen3.5:9b-mlx")
@@ -48,7 +48,7 @@ async def test_unloader_sends_correct_payload(mock_client: AsyncMock) -> None:
     3. Requests a different model to trigger unloading.
     4. Asserts that the unloading request was sent with the correct payload.
     """
-    engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
+    engine = ModelUnloader(http_client=mock_client)
     engine._active_model = "qwen3.5:9b-mlx"
 
     req = httpx.Request("POST", "http://127.0.0.1:11434/api/generate")
@@ -74,7 +74,7 @@ async def test_concurrent_requests_dont_double_unload(mock_client: AsyncMock) ->
     2. Sends three concurrent requests for the same target model.
     3. Asserts that only one request actually executed the HTTP unloading payload.
     """
-    engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
+    engine = ModelUnloader(http_client=mock_client)
     engine._active_model = "qwen3.5:9b-mlx"
 
     async def delayed_post(*args: typing.Any, **kwargs: typing.Any) -> httpx.Response:
@@ -97,7 +97,7 @@ async def test_concurrent_requests_dont_double_unload(mock_client: AsyncMock) ->
 
 async def test_unloader_error_handling(mock_client: AsyncMock) -> None:
     """If the unloading POST request fails, we should handle it or raise custom exceptions."""
-    engine = ModelUnloader(ollama_url="http://127.0.0.1:11434", http_client=mock_client)
+    engine = ModelUnloader(http_client=mock_client)
     engine._active_model = "qwen3.5:9b-mlx"
 
     mock_client.post.side_effect = httpx.RequestError("Connection failed")

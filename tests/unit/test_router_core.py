@@ -64,6 +64,50 @@ async def test_no_keys_available(memory_db: aiosqlite.Connection) -> None:
     with pytest.raises(NoKeysAvailableError):
         await router.get_next_key("unknown")
 
+
+@pytest.mark.asyncio
+async def test_get_best_platform_and_key(memory_db: aiosqlite.Connection) -> None:
+    router = RouterCore(memory_db)
+
+    # 1. No candidates provided
+    with pytest.raises(NoKeysAvailableError):
+        await router.get_best_platform_and_key([])
+
+    # 2. No keys configured for the candidate platforms
+    with pytest.raises(NoKeysAvailableError):
+        await router.get_best_platform_and_key(["non-existent-platform"])
+
+    # 3. Successful retrieval
+    platform, key = await router.get_best_platform_and_key(["openrouter", "gemini"])
+    assert platform == "openrouter"
+    assert key["key_hash"] == "hash2"  # priority 2
+
+    # 4. Memory cooldown check
+    router._cooldowns["hash2"] = datetime.datetime.now(datetime.UTC).timestamp() + 3600
+    platform, key = await router.get_best_platform_and_key(["openrouter"])
+    assert key["key_hash"] == "hash3"  # priority 1
+
+    # 5. DB cooldown check
+    now = datetime.datetime.now(datetime.UTC)
+    future = (now + datetime.timedelta(seconds=3600)).isoformat()
+    await memory_db.execute(
+        "UPDATE api_keys SET try_after = ? WHERE key_hash IN ('hash3', 'hash1')", (future,)
+    )
+    await memory_db.commit()
+
+    with pytest.raises(NoKeysAvailableError):
+        await router.get_best_platform_and_key(["openrouter"])
+
+    # 6. Cooldown expired (testing db cooldown clearing)
+    past = (now - datetime.timedelta(seconds=3600)).isoformat()
+    await memory_db.execute("UPDATE api_keys SET try_after = ? WHERE key_hash = 'hash3'", (past,))
+    await memory_db.commit()
+    router._cooldowns["hash3"] = now.timestamp() - 3600
+
+    platform, key = await router.get_best_platform_and_key(["openrouter"])
+    assert platform == "openrouter"
+    assert key["key_hash"] == "hash3"
+
     await router.mark_key_exhausted("hash4", 3600.0)
     with pytest.raises(NoKeysAvailableError, match="All keys for gemini are currently exhausted"):
         await router.get_next_key("gemini")
