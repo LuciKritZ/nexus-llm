@@ -38,3 +38,7 @@ nexus_llm_state.db
 
 # Tests
 e2e_out.log
+
+# Logs
+nexus-llm.err.log
+nexus-llm.log
