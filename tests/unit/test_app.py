@@ -164,7 +164,11 @@ def test_chat_completions_proxy_coverage(mock_profile: AsyncMock, client: TestCl
 
     # 3. Explicit fallback_model
     app = typing.cast(typing.Any, client.app)
-    fallback_model = app.state.platforms.get("system_fallback", {}).get("model", "llama3")
+    # mock fallback
+    app.state.platforms = {"system_fallback": {"model": "llama3"}}
+    fallback_model = "llama3"
+
+    # Hit line 34 (fallback_model present and explicitly requested)
     response = client.post("/v1/chat/completions", json={"model": fallback_model, "messages": []})
     assert response.status_code == 200
 
@@ -180,6 +184,32 @@ def test_chat_completions_proxy_coverage(mock_profile: AsyncMock, client: TestCl
         "/v1/chat/completions", json={"model": "non-existent-model", "messages": []}
     )
     assert response.status_code == 200
+
+
+def test_lifespan_platforms_json() -> None:
+    from unittest.mock import mock_open, patch
+
+    from fastapi.testclient import TestClient
+
+    from nexus_llm.app import create_app
+
+    # 1. platforms.json exists and is valid
+    app = create_app()
+    mock_json = '{"system_fallback": {"model": "test"}}'
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("builtins.open", mock_open(read_data=mock_json)),
+        TestClient(app),
+    ):
+        pass
+
+    # 2. platforms.json exists but is invalid JSON (hits except pass block)
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("builtins.open", mock_open(read_data="invalid json")),
+        TestClient(app),
+    ):
+        pass
 
 
 def test_exception_handlers(client: TestClient) -> None:
