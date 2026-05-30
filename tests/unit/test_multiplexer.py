@@ -155,6 +155,14 @@ def test_get_client_for_platform() -> None:
         get_client_for_platform("unknown", "key")
 
 
+def test_get_client_for_groq() -> None:
+    from nexus_llm.services.adapters import OpenAICompatibleClient
+    from nexus_llm.services.multiplexer import get_client_for_platform
+
+    client = get_client_for_platform("groq", "test_key")
+    assert isinstance(client, OpenAICompatibleClient)
+
+
 @pytest.mark.asyncio
 @patch("nexus_llm.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_empty_stream(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
