@@ -2,13 +2,13 @@
 
 `nexus-llm` is a local API proxy designed for developers running advanced local LLMs on workstations with limited unified memory. 
 
-It intercepts incoming JSON-RPC chat completion payloads from IDE extensions (like RooCode/Continue) and intelligently routes them between local Ollama instances and Google's Gemini API to protect your local VRAM.
+It intercepts incoming JSON-RPC chat completion payloads from IDE extensions (like RooCode/Continue) and intelligently routes them between local Ollama instances, Anthropic's Claude API, Google's Gemini API, and OpenRouter to protect your local VRAM and wallet.
 
 ## Key Features
 
 1. **Intelligent Capability Routing:** Uses a deterministic profiler to calculate context length and identify images. Models are dynamically selected from `platforms.json` based on whether they support vision and have sufficient max context limits.
 2. **Context Preservation:** When routing text-only follow-ups to text-only models, older images in the chat history are automatically stripped and replaced with `[Image: <hash>]` placeholders to preserve chat flow without sending raw bytes.
-3. **OpenAI Compatibility:** Native streaming protocols (like Gemini SSE) are intercepted, parsed, and transparently translated into strict OpenAI chunk format before streaming back to the client.
+3. **OpenAI Compatibility & API Security:** Native streaming protocols (like Anthropic Messages and Gemini SSE) are intercepted, parsed, and transparently translated into strict OpenAI chunk format before streaming back to the client. All endpoints are fully secured via a local static Bearer token check.
 4. **Automated VRAM Unloading:** Automatically tracks active Ollama models. When a model switch occurs, it forcefully unloads the idle model using `keep_alive: 0` before loading the new one, preventing OOM crashes.
 5. **Active Context Compressor & Safe Rolling Context:** Intercepts raw HTML fetched from the web and strips layout/boilerplate tags. It uses a `system_fallback` model to summarize conversational histories without dropping critical active context.
 6. **Image Description Cache:** Automatically caches image payloads to disk using SHA-256 hashing.
@@ -51,7 +51,11 @@ Configuration is minimal and managed via a `.env` file in the root directory:
 
 ```env
 PORT=11444
+PROXY_PASSWORD=your_secure_password
 ```
+
+**Client Configuration:**
+Because `nexus-llm` enforces standard OpenAI-compatible API authentication, you must configure your frontend clients (Continue, RooCode, Open WebUI) to pass the `PROXY_PASSWORD` as the API Key. The client will automatically send it as an `Authorization: Bearer <PROXY_PASSWORD>` header. If the password is omitted from the `.env` file, the proxy operates openly.
 
 **Platforms & Key Management:**
 Routing relies entirely on `platforms.json` for model capabilities and endpoints, and `keys.json` for API authentication.
