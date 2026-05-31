@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     keys_json_path: str = "keys.json"
     default_cooldown_minutes: int = 60
     image_token_reserve: int = 4096
+    proxy_password: str | None = None
 
 
 settings = Settings()

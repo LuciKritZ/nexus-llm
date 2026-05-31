@@ -137,6 +137,21 @@ def test_chat_completions_proxy_nexus_auto(mock_profile: AsyncMock, client: Test
     mock_profile.assert_called_once()
 
 
+def test_chat_completions_proxy_unauthorized(client: TestClient) -> None:
+    # Setup test with a password
+    with patch("nexus_llm.routes.proxy.settings.proxy_password", "my_secret"):
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "auto",
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": True,
+            },
+        )
+        assert response.status_code == 401
+        assert response.json() == {"detail": "Invalid or missing Bearer token"}
+
+
 @patch("nexus_llm.services.gatekeeper.Gatekeeper.profile_request")
 def test_chat_completions_proxy_coverage(mock_profile: AsyncMock, client: TestClient) -> None:
     app = typing.cast(typing.Any, client.app)

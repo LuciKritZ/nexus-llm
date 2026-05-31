@@ -3,9 +3,11 @@ import json
 import logging
 import typing
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from nexus_llm.config import settings
 from nexus_llm.models.schemas import ChatCompletionRequest
 from nexus_llm.services.cache import ImageCache
 from nexus_llm.services.compressor import ContextCompressor
@@ -16,8 +18,21 @@ from nexus_llm.services.unloader import ModelUnloader
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+security = HTTPBearer(auto_error=False)
 
-@router.post("/v1/chat/completions")
+
+async def verify_auth(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> None:  # noqa: B008
+    if settings.proxy_password and (
+        not credentials or credentials.credentials != settings.proxy_password
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@router.post("/v1/chat/completions", dependencies=[Depends(verify_auth)])
 async def chat_completions(
     fastapi_req: Request, payload: ChatCompletionRequest
 ) -> StreamingResponse:

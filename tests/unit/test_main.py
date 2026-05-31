@@ -25,3 +25,33 @@ def test_main_run_server(mock_run: unittest.mock.MagicMock) -> None:
     mock_run.assert_called_once_with(
         "nexus_llm.app:create_app", host="0.0.0.0", port=1234, factory=True
     )
+
+
+@patch("nexus_llm.__main__.uvicorn.run")
+@patch("getpass.getpass")
+@patch("nexus_llm.__main__.settings")
+def test_main_password_correct(
+    mock_settings: unittest.mock.MagicMock,
+    mock_getpass: unittest.mock.MagicMock,
+    mock_run: unittest.mock.MagicMock,
+) -> None:
+    mock_settings.proxy_password = "correct_password"
+    mock_getpass.return_value = "correct_password"
+    with patch.object(sys, "argv", ["nexus-llm", "--port", "1234"]):
+        main()
+    mock_run.assert_called_once()
+
+
+@patch("nexus_llm.__main__.uvicorn.run")
+@patch("getpass.getpass")
+@patch("nexus_llm.__main__.settings")
+def test_main_password_incorrect(
+    mock_settings: unittest.mock.MagicMock,
+    mock_getpass: unittest.mock.MagicMock,
+    mock_run: unittest.mock.MagicMock,
+) -> None:
+    mock_settings.proxy_password = "correct_password"
+    mock_getpass.return_value = "wrong_password"
+    with patch.object(sys, "argv", ["nexus-llm", "--port", "1234"]), pytest.raises(SystemExit):
+        main()
+    mock_run.assert_not_called()
