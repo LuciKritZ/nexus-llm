@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 
 from nexus_llm.exceptions import RateLimitError
-from nexus_llm.services.adapters import OpenAICompatibleClient
+from nexus_llm.services.adapters import AnthropicClient, OpenAICompatibleClient
 from nexus_llm.services.gemini_client import GeminiClient
 from nexus_llm.services.router_core import NoKeysAvailableError, RouterCore
 
@@ -34,6 +34,10 @@ def get_client_for_platform(
             api_key=api_key,
             base_url=api_base or "https://api.groq.com/openai",
             client=http_client,
+        )
+    elif platform == "anthropic":
+        return AnthropicClient(
+            api_key=api_key, base_url=api_base or "https://api.anthropic.com", client=http_client
         )
     else:
         raise ValueError(f"Unknown platform: {platform}")
@@ -72,8 +76,16 @@ class Multiplexer:
 
         # Map platforms to their corresponding target models from the candidates list
         platform_to_models: dict[str, list[tuple[str, str]]] = {}
+        supported_platforms = {"anthropic", "openai", "gemini", "groq", "openrouter", "ollama"}
+
         for c in candidate_models:
-            parts = c.split("/", 1)
+            if "/" in c:
+                parts = c.split("/", 1)
+            elif "." in c and c.split(".", 1)[0] in supported_platforms:
+                parts = c.split(".", 1)
+            else:
+                parts = [c]
+
             p = parts[0]
             m = parts[1] if len(parts) > 1 else parts[0]
 

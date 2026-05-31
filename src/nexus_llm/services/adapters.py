@@ -90,3 +90,77 @@ class OpenAICompatibleClient(BaseLLMClient):
 
         # Fallback for generic errors
         response.raise_for_status()
+
+
+class AnthropicClient(BaseLLMClient):
+    """Client adapter for Anthropic APIs."""
+
+    async def generate_stream(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> AsyncGenerator[str, None]:
+        headers = {
+            "x-api-key": self.api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+
+        system_msg = ""
+        anthropic_messages = []
+        for msg in messages:
+            if msg.get("role") == "system":
+                system_msg += msg.get("content", "") + "\n"
+            else:
+                anthropic_messages.append(msg)
+
+        payload = {
+            "model": model,
+            "messages": anthropic_messages,
+            "stream": True,
+            "max_tokens": kwargs.get("max_tokens", 4096),
+        }
+        if system_msg:
+            payload["system"] = system_msg.strip()
+
+        for k, v in kwargs.items():
+            if k not in ["max_tokens", "stream", "model", "messages"]:
+                payload[k] = v
+
+        client_to_use = self.client or httpx.AsyncClient()
+        async with client_to_use.stream(
+            "POST", f"{self.base_url}/v1/messages", headers=headers, json=payload
+        ) as response:
+            if response.status_code != 200:
+                self.handle_error(response)
+
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    data_str = line[6:].strip()
+                    if not data_str:
+                        continue
+                    try:
+                        data = json.loads(data_str)
+                        if data.get("type") == "content_block_delta":
+                            content = data.get("delta", {}).get("text")
+                            if content:
+                                yield content
+                    except (json.JSONDecodeError, KeyError):
+                        pass
+
+    def handle_error(self, response: httpx.Response) -> None:
+        if response.status_code == 429:
+            reset_time = response.headers.get("anthropic-retry-after") or response.headers.get(
+                "retry-after"
+            )
+            try:
+                retry_after = float(reset_time) if reset_time else 60.0
+            except ValueError:
+                retry_after = 60.0
+            raise RateLimitError("Anthropic Rate Limited", retry_after=retry_after)
+
+        if response.status_code in (401, 403):
+            raise QuotaExceededError("Anthropic Quota Exceeded or Unauthorized")
+
+        response.raise_for_status()
