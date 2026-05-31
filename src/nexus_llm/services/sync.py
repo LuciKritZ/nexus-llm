@@ -12,13 +12,17 @@ async def sync_keys_from_json(db: aiosqlite.Connection, json_path: str) -> None:
     except (FileNotFoundError, json.JSONDecodeError):
         return
 
-    platforms = data.get("platforms", {})
-
     # Clear existing keys to ensure no residual/deleted keys persist
     await db.execute("DELETE FROM api_keys")
 
-    for platform, keys in platforms.items():
+    keys_dict = data.get("keys", {})
+    for platform, keys in keys_dict.items():
+        if not isinstance(keys, list):
+            continue
+
         for key_obj in keys:
+            if not isinstance(key_obj, dict):
+                continue
             key_value = key_obj.get("key_value")
             priority = key_obj.get("priority", 1)
             meta = json.dumps(key_obj.get("meta", {}))

@@ -1,0 +1,68 @@
+{
+  "keys": {
+    "openrouter": [
+      {
+        "key_value": "sk-or-v1-abcdef1234567890",
+        "priority": 1,
+        "meta": {
+          "description": "Free tier account 1",
+          "models": [
+            "openrouter/openrouter/free",
+            "openrouter/openrouter/auto"
+          ]
+        }
+      },
+      {
+        "key_value": "sk-or-v1-0987654321fedcba",
+        "priority": 2,
+        "meta": {
+          "description": "Free tier account 2",
+          "models": [
+            "openrouter/openrouter/free"
+          ]
+        }
+      }
+    ],
+    "gemini": [
+      {
+        "key_value": "AIzaSyB1234567890abcdefghijklmnopqrstuv",
+        "priority": 1,
+        "meta": {
+          "description": "Google AI Studio Credits"
+        }
+      }
+    ],
+    "groq": [
+      {
+        "key_value": "gsk_1234567890abcdefghijklmnopqrstuvwxyz",
+        "priority": 1
+      }
+    ]
+  },
+  "models": {
+    "taken-from": "https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json",
+    "gemini/gemini-2.5-flash-lite": {
+      "max_input_tokens": 1048576,
+      "max_output_tokens": 65535,
+      "mode": "chat",
+      "supports_vision": true
+    },
+    "groq/llama-3.1-8b-instant": {
+      "max_input_tokens": 128000,
+      "max_output_tokens": 8192,
+      "mode": "chat",
+      "supports_vision": false
+    },
+    "openrouter/openrouter/free": {
+      "max_input_tokens": 200000,
+      "mode": "chat",
+      "supports_vision": true
+    },
+    "ollama/qwen2.5:1.5b": {
+      "max_input_tokens": 32768,
+      "max_output_tokens": 8192,
+      "mode": "chat",
+      "supports_vision": false
+    }
+  }
+}

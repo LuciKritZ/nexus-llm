@@ -21,7 +21,7 @@ async def memory_db() -> AsyncGenerator[aiosqlite.Connection, None]:
 @pytest.fixture
 def mock_keys_json() -> Generator[str, None, None]:
     data = {
-        "platforms": {
+        "keys": {
             "openrouter": [{"key_value": "test-key-1", "priority": 1, "meta": {"name": "test"}}]
         }
     }
@@ -72,7 +72,7 @@ async def test_sync_keys_from_json_invalid_json(memory_db: aiosqlite.Connection)
 
 @pytest.fixture
 def mock_keys_json_missing_key_value() -> Generator[str, None, None]:
-    data = {"platforms": {"openrouter": [{"priority": 1, "meta": {"name": "test"}}]}}
+    data = {"keys": {"openrouter": [{"priority": 1, "meta": {"name": "test"}}]}}
     with tempfile.NamedTemporaryFile("w", delete=False) as f:
         json.dump(data, f)
         temp_name = f.name
@@ -85,6 +85,27 @@ async def test_sync_keys_from_json_missing_key_value(
     memory_db: aiosqlite.Connection, mock_keys_json_missing_key_value: str
 ) -> None:
     await sync_keys_from_json(memory_db, mock_keys_json_missing_key_value)
+    async with memory_db.execute("SELECT COUNT(*) FROM api_keys") as cursor:
+        count = await cursor.fetchone()
+        assert count is not None
+        assert count[0] == 0
+
+
+@pytest.fixture
+def mock_keys_json_invalid_types() -> Generator[str, None, None]:
+    data = {"keys": {"not-a-list": "this is a string", "bad-key-obj": ["not a dict"]}}
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        json.dump(data, f)
+        temp_name = f.name
+    yield temp_name
+    os.remove(temp_name)
+
+
+@pytest.mark.asyncio
+async def test_sync_keys_from_json_invalid_types(
+    memory_db: aiosqlite.Connection, mock_keys_json_invalid_types: str
+) -> None:
+    await sync_keys_from_json(memory_db, mock_keys_json_invalid_types)
     async with memory_db.execute("SELECT COUNT(*) FROM api_keys") as cursor:
         count = await cursor.fetchone()
         assert count is not None
