@@ -30,8 +30,8 @@ uv.lock
 .logs/
 
 # Keys
-platforms.json
-keys.json
+models.json
+
 
 # Local DB
 nexus_llm_state.db

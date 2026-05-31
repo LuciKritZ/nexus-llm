@@ -25,28 +25,29 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     import json
     from pathlib import Path
 
-    platforms_data = {}
-    platforms_path = Path("platforms.json")
-    if platforms_path.exists():
+    models_data = {}
+    models_path = Path("models.json")
+    if models_path.exists():
         try:
-            with open(platforms_path, encoding="utf-8") as f:
-                platforms_data = json.load(f)
+            with open(models_path, encoding="utf-8") as f:
+                models_data = json.load(f)
         except Exception:  # pragma: no cover
             pass
 
     client = httpx.AsyncClient(timeout=300.0)
-    unloader = ModelUnloader(http_client=client, platforms_data=platforms_data)
+    models_dict = models_data.get("models", {})
+    unloader = ModelUnloader(http_client=client, platforms_data=models_dict)
     compressor = ContextCompressor()
     cache = ImageCache()
     gemini_client = GeminiClient(client=client)
 
     db = await aiosqlite.connect(settings.sqlite_db_path)
     await init_db(db)
-    await sync_keys_from_json(db, settings.keys_json_path)
+    await sync_keys_from_json(db, settings.models_json_path)
 
     router_core = RouterCore(db)
-    gatekeeper = Gatekeeper(client, platforms_data)
-    multiplexer = Multiplexer(router_core, client, platforms_data)
+    gatekeeper = Gatekeeper(client, models_dict)
+    multiplexer = Multiplexer(router_core, client, models_dict)
 
     app.state.http_client = client
     app.state.unloader = unloader
@@ -57,7 +58,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
     app.state.router_core = router_core
     app.state.gatekeeper = gatekeeper
     app.state.multiplexer = multiplexer
-    app.state.platforms = platforms_data
+    app.state.platforms = models_dict
 
     yield
 

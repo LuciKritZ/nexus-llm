@@ -6,7 +6,7 @@ It intercepts incoming JSON-RPC chat completion payloads from IDE extensions (li
 
 ## Key Features
 
-1. **Intelligent Capability Routing:** Uses a deterministic profiler to calculate context length and identify images. Models are dynamically selected from `platforms.json` based on whether they support vision and have sufficient max context limits.
+1. **Intelligent Capability Routing:** Uses a deterministic profiler to calculate context length and identify images. Models are dynamically selected from `models.json` based on whether they support vision and have sufficient max context limits.
 2. **Context Preservation:** When routing text-only follow-ups to text-only models, older images in the chat history are automatically stripped and replaced with `[Image: <hash>]` placeholders to preserve chat flow without sending raw bytes.
 3. **OpenAI Compatibility & API Security:** Native streaming protocols (like Anthropic Messages and Gemini SSE) are intercepted, parsed, and transparently translated into strict OpenAI chunk format before streaming back to the client. All endpoints are fully secured via a local static Bearer token check.
 4. **Automated VRAM Unloading:** Automatically tracks active Ollama models. When a model switch occurs, it forcefully unloads the idle model using `keep_alive: 0` before loading the new one, preventing OOM crashes.
@@ -58,9 +58,8 @@ PROXY_PASSWORD=your_secure_password
 Because `nexus-llm` enforces standard OpenAI-compatible API authentication, you must configure your frontend clients (Continue, RooCode, Open WebUI) to pass the `PROXY_PASSWORD` as the API Key. The client will automatically send it as an `Authorization: Bearer <PROXY_PASSWORD>` header. If the password is omitted from the `.env` file, the proxy operates openly.
 
 **Platforms & Key Management:**
-Routing relies entirely on `platforms.json` for model capabilities and endpoints, and `keys.json` for API authentication.
-- **`platforms.json`**: Defines supported models, context limits, and whether they support vision. Also specifies the `system_fallback` used for context compression and default local routing.
-- **`keys.json`**: For seamless key rotation and multi-key failover across various platforms (Gemini, OpenRouter, etc.), configure your API credentials and priority levels here.
+Routing relies entirely on `models.json` for model capabilities, endpoints, and API authentication.
+- **`models.json`**: Features a top-level `"keys"` dictionary to securely store all your API keys across various platforms (Gemini, OpenRouter, etc.) and a `"models"` dictionary defining all supported models, their context limits, and fallback logic.
 
 ## Architecture
 
