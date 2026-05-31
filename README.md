@@ -55,7 +55,7 @@ PROXY_PASSWORD=your_secure_password
 ```
 
 **Client Configuration:**
-Because `nexus-llm` enforces standard OpenAI-compatible API authentication, you must configure your frontend clients (Continue, RooCode, Open WebUI) to pass the `PROXY_PASSWORD` as the API Key. The client will automatically send it as an `Authorization: Bearer <PROXY_PASSWORD>` header. If the password is omitted from the `.env` file, the proxy operates openly.
+Because `nexus-llm` enforces standard OpenAI-compatible API authentication, you must configure your frontend clients (Continue, RooCode, Open WebUI) to pass the `PROXY_PASSWORD` as the API Key. The client will automatically send it as an `Authorization: Bearer <PROXY_PASSWORD>` header. For security reasons, the proxy will refuse to start if the password is omitted from the `.env` file.
 
 **Platforms & Key Management:**
 Routing relies entirely on `models.json` for model capabilities, endpoints, and API authentication.
