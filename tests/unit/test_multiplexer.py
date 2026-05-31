@@ -163,6 +163,14 @@ def test_get_client_for_groq() -> None:
     assert isinstance(client, OpenAICompatibleClient)
 
 
+def test_get_client_for_anthropic() -> None:
+    from nexus_llm.services.adapters import AnthropicClient
+    from nexus_llm.services.multiplexer import get_client_for_platform
+
+    client = get_client_for_platform("anthropic", "test_key")
+    assert isinstance(client, AnthropicClient)
+
+
 @pytest.mark.asyncio
 @patch("nexus_llm.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_empty_stream(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
@@ -219,3 +227,27 @@ async def test_multiplexer_ollama_fast_path(
 
     assert chunks == ["Ollama", " is", " fast"]
     assert mock_router.get_best_platform_and_key.call_count == 0
+
+
+@pytest.mark.asyncio
+@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+async def test_multiplexer_dot_notation(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
+    mock_router.get_best_platform_and_key.return_value = (
+        "anthropic",
+        {"key_hash": "h1", "key_value": "v1"},
+    )
+
+    mock_client = MagicMock()
+    mock_client.generate_stream.return_value = MockStreamGen(["dot", " works"])
+    mock_get_client.return_value = mock_client
+
+    multiplexer = Multiplexer(mock_router)
+    chunks = [
+        c
+        async for c in multiplexer.generate_stream(
+            ["anthropic.claude-3-5-sonnet-20241022", "unknown_model"], []
+        )
+    ]
+
+    assert chunks == ["dot", " works"]
+    mock_client.generate_stream.assert_called_once_with("claude-3-5-sonnet-20241022", [], **{})

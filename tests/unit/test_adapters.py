@@ -1,11 +1,12 @@
 from collections.abc import AsyncGenerator
 from typing import Any
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
 
 from nexus_llm.exceptions import QuotaExceededError, RateLimitError
-from nexus_llm.services.adapters import BaseLLMClient, OpenAICompatibleClient
+from nexus_llm.services.adapters import AnthropicClient, BaseLLMClient, OpenAICompatibleClient
 
 
 @pytest.fixture
@@ -47,6 +48,128 @@ async def test_openai_client_quota_exceeded(openai_client: OpenAICompatibleClien
 
     with pytest.raises(QuotaExceededError):
         openai_client.handle_error(response)
+
+
+@pytest.fixture
+def anthropic_client() -> AnthropicClient:
+    return AnthropicClient(api_key="test-key", base_url="https://api.anthropic.com")
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_generate_stream(anthropic_client: AnthropicClient) -> None:
+    # Use the mock_stream context manager provided by httpx
+    # Here we mock httpx.AsyncClient.stream
+    with patch("httpx.AsyncClient.stream") as mock_stream:
+        # Create a mock response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+
+        # Create an async iterator for aiter_lines
+        async def mock_aiter_lines() -> AsyncGenerator[str, None]:
+            yield (
+                'data: {"type": "content_block_delta", '
+                '"delta": {"type": "text_delta", "text": "Hello"}}'
+            )
+            yield "data: "
+            yield (
+                'data: {"type": "content_block_delta", '
+                '"delta": {"type": "text_delta", "text": " World"}}'
+            )
+            yield 'data: {"invalid": json}'
+            yield "not a data line"
+
+        mock_response.aiter_lines.return_value = mock_aiter_lines()
+
+        # The stream returns an async context manager which returns the mock_response
+        class AsyncContextManager:
+            async def __aenter__(self) -> MagicMock:
+                return mock_response
+
+            async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+                pass
+
+        mock_stream.return_value = AsyncContextManager()
+
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "user", "content": "Hi"},
+        ]
+
+        chunks = [
+            chunk
+            async for chunk in anthropic_client.generate_stream(
+                "claude-3-haiku", messages, max_tokens=100
+            )
+        ]
+
+        assert chunks == ["Hello", " World"]
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_rate_limit(anthropic_client: AnthropicClient) -> None:
+    request = httpx.Request("POST", "https://api.test")
+    response = httpx.Response(429, headers={"anthropic-retry-after": "42.0"}, request=request)
+
+    with pytest.raises(RateLimitError) as exc_info:
+        anthropic_client.handle_error(response)
+
+    assert exc_info.value.retry_after == 42.0
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_quota_exceeded(anthropic_client: AnthropicClient) -> None:
+    request = httpx.Request("POST", "https://api.test")
+    response = httpx.Response(403, request=request)
+
+    with pytest.raises(QuotaExceededError):
+        anthropic_client.handle_error(response)
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_error_fallback(anthropic_client: AnthropicClient) -> None:
+    request = httpx.Request("POST", "https://api.test")
+    response = httpx.Response(500, request=request)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        anthropic_client.handle_error(response)
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_rate_limit_invalid(anthropic_client: AnthropicClient) -> None:
+    request = httpx.Request("POST", "https://api.test")
+    response = httpx.Response(429, headers={"anthropic-retry-after": "invalid"}, request=request)
+
+    with pytest.raises(RateLimitError) as exc_info:
+        anthropic_client.handle_error(response)
+
+    assert exc_info.value.retry_after == 60.0
+
+
+@pytest.mark.asyncio
+async def test_anthropic_client_generate_stream_kwargs(anthropic_client: AnthropicClient) -> None:
+    with patch("httpx.AsyncClient.stream") as mock_stream:
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Error", request=httpx.Request("POST", "http://test"), response=mock_response
+        )
+
+        class AsyncContextManager:
+            async def __aenter__(self) -> MagicMock:
+                return mock_response
+
+            async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+                pass
+
+        mock_stream.return_value = AsyncContextManager()
+
+        with pytest.raises(httpx.HTTPStatusError):
+            [
+                c
+                async for c in anthropic_client.generate_stream(
+                    "model", [{"role": "user", "content": "hi"}], temperature=0.5
+                )
+            ]
 
 
 @pytest.mark.asyncio
