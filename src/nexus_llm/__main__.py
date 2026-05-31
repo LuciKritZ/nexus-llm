@@ -20,14 +20,14 @@ def main() -> None:
         print("Cache cleared!")
         return
 
-    if settings.proxy_password:
-        import getpass
+    if not settings.proxy_password:
         import sys
 
-        entered = getpass.getpass("Enter proxy password: ")
-        if entered != settings.proxy_password:
-            print("Incorrect password. Exiting.")
-            sys.exit(1)
+        print(
+            "CRITICAL ERROR: PROXY_PASSWORD is not set in your .env file",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     uvicorn.run("nexus_llm.app:create_app", host="0.0.0.0", port=args.port, factory=True)
 
