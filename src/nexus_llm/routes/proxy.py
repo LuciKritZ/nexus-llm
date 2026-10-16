@@ -2,13 +2,18 @@ import base64
 import json
 import logging
 import typing
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from nexus_llm.config import settings
-from nexus_llm.models.schemas import ChatCompletionRequest
+from nexus_llm.models.schemas import (
+    AnthropicMessagesRequest,
+    ChatCompletionRequest,
+    convert_anthropic_to_chat_completion,
+)
 from nexus_llm.services.cache import ImageCache
 from nexus_llm.services.compressor import ContextCompressor
 from nexus_llm.services.gatekeeper import Gatekeeper
@@ -21,38 +26,38 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer(auto_error=False)
 
 
-async def verify_auth(credentials: HTTPAuthorizationCredentials | None = Depends(security)) -> None:  # noqa: B008
-    if settings.proxy_password and (
-        not credentials or credentials.credentials != settings.proxy_password
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing Bearer token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+async def verify_auth(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
+) -> None:
+    if settings.proxy_password:
+        x_api_key = request.headers.get("x-api-key")
+        token = credentials.credentials if credentials else x_api_key
+        if token != settings.proxy_password:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing Bearer token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
 
-@router.post("/v1/chat/completions", dependencies=[Depends(verify_auth)])
-async def chat_completions(
-    fastapi_req: Request, payload: ChatCompletionRequest
-) -> StreamingResponse:
+async def _prepare_request_pipeline(
+    payload: ChatCompletionRequest,
+    fastapi_req: Request,
+) -> tuple[list[str], dict[str, typing.Any], int]:
     unloader: ModelUnloader = fastapi_req.app.state.unloader
     compressor: ContextCompressor = fastapi_req.app.state.compressor
     cache: ImageCache = fastapi_req.app.state.cache
     gatekeeper: Gatekeeper = fastapi_req.app.state.gatekeeper
-    multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
 
     platforms_data = getattr(fastapi_req.app.state, "platforms", {})
     fallback_model = platforms_data.get("system_fallback", {}).get("model")
-
-    if fallback_model and payload.model not in ("auto", "nexus-auto"):
-        pass
 
     await unloader.unload_if_needed(payload.model)
 
     has_images_in_latest = False
     latest_msg_index = len(payload.messages) - 1
-    cached_hashes = {}
+    cached_hashes: dict[int, str] = {}
 
     for i, message in enumerate(payload.messages):
         if isinstance(message.content, list):
@@ -81,9 +86,9 @@ async def chat_completions(
     profile = await gatekeeper.profile_request(payload_dict_for_gatekeeper)
     context_length = profile.get("context_length", 0)
 
-    candidates = []
+    candidates: list[str] = []
 
-    if payload.model in ("auto", "nexus-auto"):
+    if payload.model in ("auto", "nexus-auto", "claude-auto"):
         for key, config in platforms_data.items():
             if not isinstance(config, dict) or key == "system_fallback":
                 continue
@@ -98,7 +103,6 @@ async def chat_completions(
             logger.warning("No candidates found, falling back to system fallback")
             candidates = ["system_fallback"]
 
-        # Target model for compression heuristics (use first candidate)
         target_model_for_compression = (
             candidates[0].split("/", 1)[1] if "/" in candidates[0] else candidates[0]
         )
@@ -115,17 +119,38 @@ async def chat_completions(
         else:
             found = [k for k in platforms_data if k.endswith(f"/{payload.model}")]
             if found:
-                candidates = found
+                candidates = list(found)
+                target_model_for_compression = payload.model
+            elif payload.model.startswith("claude"):
+                candidates = [f"anthropic/{payload.model}"]
                 target_model_for_compression = payload.model
             else:
                 candidates = [f"ollama/{payload.model}"]
                 target_model_for_compression = payload.model
+
+        # Append other configured platforms as fallback candidates for autoswitching
+        for key, config in platforms_data.items():
+            if not isinstance(config, dict) or key == "system_fallback":
+                continue
+            if key not in candidates:
+                if has_images_in_latest and not config.get("supports_vision"):
+                    continue
+                candidates.append(key)
 
     payload.messages = compressor.compress_messages(
         payload.messages, target_model_for_compression, has_images_in_latest
     )
 
     payload_dict = payload.model_dump(exclude_none=True)
+    return candidates, payload_dict, context_length
+
+
+@router.post("/v1/chat/completions", dependencies=[Depends(verify_auth)])
+async def chat_completions(
+    fastapi_req: Request, payload: ChatCompletionRequest
+) -> StreamingResponse:
+    multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
+    candidates, payload_dict, _ = await _prepare_request_pipeline(payload, fastapi_req)
 
     async def sse_wrapper() -> typing.AsyncGenerator[bytes, None]:
         extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
@@ -134,7 +159,6 @@ async def chat_completions(
             messages=payload_dict.get("messages", []),
             **extra_kwargs,
         ):
-            # For SSE response, we can just use a generic platform name since multiplexer handles it
             openai_chunk = {
                 "id": "chatcmpl-dynamic",
                 "object": "chat.completion.chunk",
@@ -147,3 +171,121 @@ async def chat_completions(
         sse_wrapper(),
         media_type="text/event-stream",
     )
+
+
+@router.post("/v1/messages", dependencies=[Depends(verify_auth)])
+async def anthropic_messages(fastapi_req: Request, payload: AnthropicMessagesRequest) -> Response:
+    chat_req = convert_anthropic_to_chat_completion(payload)
+    multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
+    candidates, payload_dict, context_length = await _prepare_request_pipeline(
+        chat_req, fastapi_req
+    )
+    extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
+    msg_id = f"msg_{uuid.uuid4().hex[:24]}"
+
+    if payload.stream:
+
+        async def sse_anthropic_wrapper() -> typing.AsyncGenerator[bytes, None]:
+            message_start = {
+                "type": "message_start",
+                "message": {
+                    "id": msg_id,
+                    "type": "message",
+                    "role": "assistant",
+                    "model": payload.model,
+                    "content": [],
+                    "stop_reason": None,
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": max(1, context_length), "output_tokens": 1},
+                },
+            }
+            yield f"event: message_start\ndata: {json.dumps(message_start)}\n\n".encode()
+
+            content_block_start = {
+                "type": "content_block_start",
+                "index": 0,
+                "content_block": {"type": "text", "text": ""},
+            }
+            cb_start_data = json.dumps(content_block_start)
+            yield f"event: content_block_start\ndata: {cb_start_data}\n\n".encode()
+
+            total_output_tokens = 0
+            async for chunk in multiplexer.generate_stream(
+                candidate_models=candidates,
+                messages=payload_dict.get("messages", []),
+                **extra_kwargs,
+            ):
+                if chunk:
+                    total_output_tokens += max(1, len(chunk) // 4)
+                    delta_event = {
+                        "type": "content_block_delta",
+                        "index": 0,
+                        "delta": {"type": "text_delta", "text": chunk},
+                    }
+                    delta_data = json.dumps(delta_event)
+                    yield f"event: content_block_delta\ndata: {delta_data}\n\n".encode()
+
+            content_block_stop = {"type": "content_block_stop", "index": 0}
+            yield f"event: content_block_stop\ndata: {json.dumps(content_block_stop)}\n\n".encode()
+
+            message_delta = {
+                "type": "message_delta",
+                "delta": {"stop_reason": "end_turn", "stop_sequence": None},
+                "usage": {"output_tokens": max(1, total_output_tokens)},
+            }
+            yield f"event: message_delta\ndata: {json.dumps(message_delta)}\n\n".encode()
+
+            message_stop = {"type": "message_stop"}
+            yield f"event: message_stop\ndata: {json.dumps(message_stop)}\n\n".encode()
+
+        return StreamingResponse(
+            sse_anthropic_wrapper(),
+            media_type="text/event-stream",
+        )
+
+    # Non-streaming
+    accumulated_content = []
+    async for chunk in multiplexer.generate_stream(
+        candidate_models=candidates,
+        messages=payload_dict.get("messages", []),
+        **extra_kwargs,
+    ):
+        accumulated_content.append(chunk)
+
+    full_text = "".join(accumulated_content)
+    total_output_tokens = max(1, len(full_text) // 4)
+    return JSONResponse(
+        content={
+            "id": msg_id,
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "text", "text": full_text}],
+            "model": payload.model,
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {
+                "input_tokens": max(1, context_length),
+                "output_tokens": total_output_tokens,
+            },
+        }
+    )
+
+
+@router.post("/v1/messages/count_tokens", dependencies=[Depends(verify_auth)])
+async def count_tokens(fastapi_req: Request, payload: AnthropicMessagesRequest) -> JSONResponse:
+    chat_req = convert_anthropic_to_chat_completion(payload)
+    profile = await fastapi_req.app.state.gatekeeper.profile_request(
+        chat_req.model_dump(exclude_none=True)
+    )
+    return JSONResponse(content={"input_tokens": profile.get("context_length", 0)})
+
+
+@router.get("/v1/models", dependencies=[Depends(verify_auth)])
+async def list_models(fastapi_req: Request) -> JSONResponse:
+    platforms_data = getattr(fastapi_req.app.state, "platforms", {})
+    models_list = [
+        {"id": k, "object": "model", "owned_by": k.split("/")[0]}
+        for k in platforms_data
+        if k not in ("taken-from", "system_fallback") and isinstance(platforms_data[k], dict)
+    ]
+    return JSONResponse(content={"object": "list", "data": models_list})

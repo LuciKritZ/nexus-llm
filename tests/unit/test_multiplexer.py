@@ -251,3 +251,86 @@ async def test_multiplexer_dot_notation(mock_get_client: MagicMock, mock_router:
 
     assert chunks == ["dot", " works"]
     mock_client.generate_stream.assert_called_once_with("claude-3-5-sonnet-20241022", [], **{})
+
+
+def test_get_client_for_platform_custom_protocols() -> None:
+    from nexus_llm.services.adapters import AnthropicClient, OpenAICompatibleClient
+    from nexus_llm.services.multiplexer import get_client_for_platform
+
+    c1 = get_client_for_platform("tokenharbor_anthropic", "k1", api_base="https://custom.api")
+    assert isinstance(c1, AnthropicClient)
+
+    c2 = get_client_for_platform("tokenharbor_openai", "k2", api_base="https://custom.api")
+    assert isinstance(c2, OpenAICompatibleClient)
+
+    c3 = get_client_for_platform("custom", "k3", protocol="anthropic")
+    assert isinstance(c3, AnthropicClient)
+
+
+@pytest.mark.asyncio
+@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+async def test_multiplexer_tier_alias_mapping(
+    mock_get_client: MagicMock, mock_router: MagicMock
+) -> None:
+    import json
+
+    meta = {
+        "api_base": "https://api.tokenharbor.com",
+        "models": {
+            "opus": "mapped-opus",
+            "sonnet": "mapped-sonnet",
+            "haiku": "mapped-haiku",
+            "custom": "mapped-custom",
+        },
+    }
+    mock_router.get_best_platform_and_key.return_value = (
+        "anthropic",
+        {"key_hash": "h1", "key_value": "v1", "meta": json.dumps(meta)},
+    )
+    mock_client = MagicMock()
+    mock_client.generate_stream.side_effect = lambda *args, **kwargs: MockStreamGen(["ok"])
+    mock_get_client.return_value = mock_client
+
+    multiplexer = Multiplexer(mock_router)
+
+    for tier, expected in [
+        ("claude-3-opus", "mapped-opus"),
+        ("claude-3-sonnet", "mapped-sonnet"),
+        ("claude-3-haiku", "mapped-haiku"),
+        ("custom", "mapped-custom"),
+    ]:
+        chunks = [c async for c in multiplexer.generate_stream([f"anthropic/{tier}"], [])]
+        assert chunks == ["ok"]
+        mock_client.generate_stream.assert_called_with(expected, [], **{})
+
+
+@pytest.mark.asyncio
+@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+async def test_multiplexer_quota_exceeded(
+    mock_get_client: MagicMock, mock_router: MagicMock
+) -> None:
+    from nexus_llm.exceptions import QuotaExceededError
+
+    mock_router.get_best_platform_and_key.side_effect = [
+        ("anthropic", {"key_hash": "h1", "key_value": "v1", "meta": "{invalid json"}),
+        ("openrouter", {"key_hash": "h2", "key_value": "v2"}),
+    ]
+
+    mock_client1 = MagicMock()
+    mock_client1.generate_stream.return_value = MockStreamGen(
+        [QuotaExceededError("Credit exhausted")]
+    )
+    mock_client2 = MagicMock()
+    mock_client2.generate_stream.return_value = MockStreamGen(["recovered"])
+
+    mock_get_client.side_effect = [mock_client1, mock_client2]
+
+    multiplexer = Multiplexer(mock_router)
+    chunks = [
+        c
+        async for c in multiplexer.generate_stream(
+            ["anthropic/claude-3-5-sonnet", "openrouter/free"], []
+        )
+    ]
+    assert chunks == ["recovered"]
+    assert mock_router.mark_key_exhausted.call_count >= 1

@@ -37,3 +37,40 @@ def test_chat_completion_extra_fields_preserved() -> None:
     request = ChatCompletionRequest.model_validate(payload)
     assert request.model_extra is not None
     assert request.model_extra["some_unknown_field"] == "test_value"
+
+
+def test_convert_anthropic_to_chat_completion() -> None:
+    from nexus_llm.models.schemas import (
+        AnthropicMessage,
+        AnthropicMessagesRequest,
+        convert_anthropic_to_chat_completion,
+    )
+
+    # 1. System as list of blocks, content with mixed blocks and non-dict items
+    req = AnthropicMessagesRequest(
+        model="claude-3-5-sonnet",
+        system=[{"type": "text", "text": "Be helpful."}, {"type": "other"}],
+        messages=[
+            AnthropicMessage(
+                role="user",
+                content=[
+                    "not-a-dict",
+                    {"type": "text", "text": "hello"},
+                    {
+                        "type": "tool_result",
+                        "content": [{"type": "text", "text": "tool output"}],
+                    },
+                ],
+            ),
+            AnthropicMessage(
+                role="user",
+                content="plain string",
+            ),
+        ],
+    )
+    chat_req = convert_anthropic_to_chat_completion(req)
+    assert len(chat_req.messages) == 3
+    assert chat_req.messages[0].role == "system"
+    assert chat_req.messages[0].content == "Be helpful."
+    assert "hello" in str(chat_req.messages[1].content)
+    assert chat_req.messages[2].content == "plain string"
