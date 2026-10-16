@@ -4,7 +4,8 @@ from typing import Any
 
 import httpx
 
-from nexus_llm.exceptions import RateLimitError
+from nexus_llm.config import settings
+from nexus_llm.exceptions import QuotaExceededError, RateLimitError
 from nexus_llm.services.adapters import AnthropicClient, OpenAICompatibleClient
 from nexus_llm.services.gemini_client import GeminiClient
 from nexus_llm.services.router_core import NoKeysAvailableError, RouterCore
@@ -17,6 +18,7 @@ def get_client_for_platform(
     api_key: str,
     http_client: httpx.AsyncClient | None = None,
     api_base: str | None = None,
+    protocol: str | None = None,
 ) -> Any:
     """Factory to get the right client for a platform."""
     if platform == "gemini":
@@ -35,12 +37,17 @@ def get_client_for_platform(
             base_url=api_base or "https://api.groq.com/openai",
             client=http_client,
         )
-    elif platform == "anthropic":
+    elif platform == "anthropic" or protocol == "anthropic":
         return AnthropicClient(
             api_key=api_key, base_url=api_base or "https://api.anthropic.com", client=http_client
         )
+    elif api_base:
+        if "anthropic" in platform.lower():
+            return AnthropicClient(api_key=api_key, base_url=api_base, client=http_client)
+        return OpenAICompatibleClient(api_key=api_key, base_url=api_base, client=http_client)
     else:
         raise ValueError(f"Unknown platform: {platform}")
+
 
 
 class Multiplexer:
@@ -116,12 +123,51 @@ class Multiplexer:
 
             key_hash = key_info["key_hash"]
             key_value = key_info["key_value"]
+            meta_val = key_info.get("meta") or {}
+            if isinstance(meta_val, str):
+                try:
+                    meta_val = json.loads(meta_val)
+                except Exception:
+                    meta_val = {}
 
             # Pick the first model matched for this platform
             full_model_key, target_model = platform_to_models[platform][0]
-            api_base = self.platforms_data.get(full_model_key, {}).get("apiBase")
+            api_base = (
+                meta_val.get("api_base")
+                or meta_val.get("apiBase")
+                or meta_val.get("base_url")
+                or self.platforms_data.get(full_model_key, {}).get("apiBase")
+            )
 
-            client = get_client_for_platform(platform, key_value, self.http_client, api_base)
+            # Resolve tier alias if defined in meta["models"]
+            tier_models = meta_val.get("models")
+            if isinstance(tier_models, dict):
+                model_lower = target_model.lower()
+                if "opus" in model_lower and (
+                    "opus" in tier_models or "ANTHROPIC_DEFAULT_OPUS_MODEL" in tier_models
+                ):
+                    target_model = tier_models.get("opus") or tier_models.get(
+                        "ANTHROPIC_DEFAULT_OPUS_MODEL", target_model
+                    )
+                elif "sonnet" in model_lower and (
+                    "sonnet" in tier_models or "ANTHROPIC_DEFAULT_SONNET_MODEL" in tier_models
+                ):
+                    target_model = tier_models.get("sonnet") or tier_models.get(
+                        "ANTHROPIC_DEFAULT_SONNET_MODEL", target_model
+                    )
+                elif "haiku" in model_lower and (
+                    "haiku" in tier_models or "ANTHROPIC_DEFAULT_HAIKU_MODEL" in tier_models
+                ):
+                    target_model = tier_models.get("haiku") or tier_models.get(
+                        "ANTHROPIC_DEFAULT_HAIKU_MODEL", target_model
+                    )
+                elif target_model in tier_models:
+                    target_model = tier_models[target_model]
+
+            protocol = meta_val.get("protocol") or meta_val.get("type")
+            client = get_client_for_platform(
+                platform, key_value, self.http_client, api_base, protocol
+            )
 
             try:
                 async with self.router_core.use_key(key_hash):
@@ -139,6 +185,13 @@ class Multiplexer:
 
                     return
 
+            except QuotaExceededError as e:
+                cooldown_sec = settings.default_cooldown_minutes * 60.0
+                logger.warning(
+                    f"Quota exceeded on {platform} key {key_hash}: {e}. Swapping platform..."
+                )
+                await self.router_core.mark_key_exhausted(key_hash, cooldown_sec)
+                attempts += 1
             except RateLimitError as e:
                 logger.warning(f"Rate limit on {platform} key {key_hash}: {e}. Swapping...")
                 await self.router_core.mark_key_exhausted(key_hash, e.retry_after or 60.0)

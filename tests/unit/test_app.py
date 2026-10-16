@@ -259,3 +259,105 @@ def test_exception_handlers(client: TestClient) -> None:
     resp3 = client.get("/test-nexus-error")
     assert resp3.status_code == 500
     assert resp3.json() == {"detail": "Generic error"}
+
+
+def test_anthropic_messages_streaming(client: TestClient) -> None:
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [{"role": "user", "content": "Hello Claude!"}],
+        "system": "You are a helpful assistant.",
+        "stream": True,
+        "max_tokens": 1024,
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers["content-type"]
+
+    body = response.content.decode("utf-8")
+    assert "event: message_start" in body
+    assert "event: content_block_delta" in body
+    assert "event: message_stop" in body
+    assert "Hello" in body
+    assert " World" in body
+
+
+def test_anthropic_messages_non_streaming(client: TestClient) -> None:
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What is in this image?"},
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                        },
+                    },
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_1",
+                        "name": "calc",
+                        "input": {"x": 1},
+                    },
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "toolu_1",
+                        "content": "res",
+                    },
+                ],
+            }
+        ],
+        "stream": False,
+    }
+    response = client.post("/v1/messages", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["type"] == "message"
+    assert data["role"] == "assistant"
+    assert "Hello World" in data["content"][0]["text"]
+
+
+def test_anthropic_count_tokens(client: TestClient) -> None:
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [{"role": "user", "content": "Count me please."}],
+    }
+    response = client.post("/v1/messages/count_tokens", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "input_tokens" in data
+
+
+def test_list_models_endpoint(client: TestClient) -> None:
+    response = client.get("/v1/models")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["object"] == "list"
+    assert isinstance(data["data"], list)
+
+
+def test_anthropic_auth(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
+    from nexus_llm.config import settings
+
+    monkeypatch.setattr(settings, "proxy_password", "secret-password")
+
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": False,
+    }
+
+    # Unauthorized
+    resp_unauth = client.post("/v1/messages", json=payload)
+    assert resp_unauth.status_code == 401
+
+    # Authorized with x-api-key
+    resp_auth_header = client.post(
+        "/v1/messages", json=payload, headers={"x-api-key": "secret-password"}
+    )
+    assert resp_auth_header.status_code == 200
+

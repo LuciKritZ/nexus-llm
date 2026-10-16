@@ -37,6 +37,21 @@
         "key_value": "gsk_1234567890abcdefghijklmnopqrstuvwxyz",
         "priority": 1
       }
+    ],
+    "tokenharbor": [
+      {
+        "key_value": "th-sk-sample1234567890",
+        "priority": 1,
+        "meta": {
+          "api_base": "https://api.tokenharbor.com",
+          "protocol": "anthropic",
+          "models": {
+            "opus": "inclusionai/ling-3.1-flash",
+            "sonnet": "nvidia/nemotron-3-super-120b-a12b:free",
+            "haiku": "nvidia/nemotron-3-ultra-550b-a55b:free"
+          }
+        }
+      }
     ]
   },
   "models": {
