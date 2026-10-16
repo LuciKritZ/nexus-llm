@@ -294,7 +294,10 @@ def test_anthropic_messages_non_streaming(client: TestClient) -> None:
                         "source": {
                             "type": "base64",
                             "media_type": "image/png",
-                            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                            "data": (
+                                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+                                "+A8AAQUBAScY42YAAAAASUVORK5CYII="
+                            ),
                         },
                     },
                     {
@@ -361,3 +364,28 @@ def test_anthropic_auth(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> 
     )
     assert resp_auth_header.status_code == 200
 
+
+def test_explicit_model_with_image_skips_non_vision_candidates(client: TestClient) -> None:
+    app = typing.cast(typing.Any, client.app)
+    app.state.platforms = {
+        "anthropic/claude-3-5-sonnet-20241022": {"max_input_tokens": 1000, "supports_vision": True},
+        "groq/llama-3.1": {"max_input_tokens": 1000, "supports_vision": False},
+    }
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "look"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="},
+                    },
+                ],
+            }
+        ],
+        "stream": True,
+    }
+    resp = client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200

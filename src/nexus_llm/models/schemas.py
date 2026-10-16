@@ -1,5 +1,5 @@
-from typing import Any, Literal
 import json
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -34,7 +34,7 @@ class ChatCompletionRequest(BaseModel):
 class AnthropicMessage(BaseModel):
     model_config = ConfigDict(extra="allow")
     role: str
-    content: str | list[dict[str, Any]]
+    content: str | list[Any]
 
 
 class AnthropicMessagesRequest(BaseModel):
@@ -121,4 +121,3 @@ def convert_anthropic_to_chat_completion(
         max_tokens=req.max_tokens,
         temperature=req.temperature,
     )
-

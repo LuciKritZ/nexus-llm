@@ -28,7 +28,7 @@ security = HTTPBearer(auto_error=False)
 
 async def verify_auth(
     request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
 ) -> None:
     if settings.proxy_password:
         x_api_key = request.headers.get("x-api-key")
@@ -174,16 +174,17 @@ async def chat_completions(
 
 
 @router.post("/v1/messages", dependencies=[Depends(verify_auth)])
-async def anthropic_messages(
-    fastapi_req: Request, payload: AnthropicMessagesRequest
-) -> Response:
+async def anthropic_messages(fastapi_req: Request, payload: AnthropicMessagesRequest) -> Response:
     chat_req = convert_anthropic_to_chat_completion(payload)
     multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
-    candidates, payload_dict, context_length = await _prepare_request_pipeline(chat_req, fastapi_req)
+    candidates, payload_dict, context_length = await _prepare_request_pipeline(
+        chat_req, fastapi_req
+    )
     extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
     msg_id = f"msg_{uuid.uuid4().hex[:24]}"
 
     if payload.stream:
+
         async def sse_anthropic_wrapper() -> typing.AsyncGenerator[bytes, None]:
             message_start = {
                 "type": "message_start",
@@ -205,7 +206,8 @@ async def anthropic_messages(
                 "index": 0,
                 "content_block": {"type": "text", "text": ""},
             }
-            yield f"event: content_block_start\ndata: {json.dumps(content_block_start)}\n\n".encode()
+            cb_start_data = json.dumps(content_block_start)
+            yield f"event: content_block_start\ndata: {cb_start_data}\n\n".encode()
 
             total_output_tokens = 0
             async for chunk in multiplexer.generate_stream(
@@ -220,7 +222,8 @@ async def anthropic_messages(
                         "index": 0,
                         "delta": {"type": "text_delta", "text": chunk},
                     }
-                    yield f"event: content_block_delta\ndata: {json.dumps(delta_event)}\n\n".encode()
+                    delta_data = json.dumps(delta_event)
+                    yield f"event: content_block_delta\ndata: {delta_data}\n\n".encode()
 
             content_block_stop = {"type": "content_block_stop", "index": 0}
             yield f"event: content_block_stop\ndata: {json.dumps(content_block_stop)}\n\n".encode()
@@ -269,9 +272,7 @@ async def anthropic_messages(
 
 
 @router.post("/v1/messages/count_tokens", dependencies=[Depends(verify_auth)])
-async def count_tokens(
-    fastapi_req: Request, payload: AnthropicMessagesRequest
-) -> JSONResponse:
+async def count_tokens(fastapi_req: Request, payload: AnthropicMessagesRequest) -> JSONResponse:
     chat_req = convert_anthropic_to_chat_completion(payload)
     profile = await fastapi_req.app.state.gatekeeper.profile_request(
         chat_req.model_dump(exclude_none=True)
