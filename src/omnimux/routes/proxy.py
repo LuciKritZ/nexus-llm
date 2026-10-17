@@ -179,9 +179,7 @@ async def _prepare_request_pipeline(
 
 
 @router.post("/v1/chat/completions", dependencies=[Depends(verify_auth)])
-async def chat_completions(
-    fastapi_req: Request, payload: ChatCompletionRequest
-) -> Response:
+async def chat_completions(fastapi_req: Request, payload: ChatCompletionRequest) -> Response:
     multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
     candidates, payload_dict, context_length = await _prepare_request_pipeline(payload, fastapi_req)
     extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}

@@ -29,9 +29,7 @@ def test_client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, 
 def test_reproduce_stream_false_chat_completions(test_client: TestClient) -> None:
     # Task 1: /v1/chat/completions with stream=False must return application/json chat.completion,
     # not text/event-stream StreamingResponse
-    with patch(
-        "omnimux.services.multiplexer.Multiplexer.generate_stream"
-    ) as mock_stream:
+    with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
         async def mock_gen(*args, **kwargs):
             yield "Hello"
             yield " world"
@@ -77,9 +75,7 @@ def test_reproduce_convert_anthropic_preserves_tools_and_top_p() -> None:
 
 def test_reproduce_openai_sse_chunk_has_index(test_client: TestClient) -> None:
     # Task 3: OpenAI SSE chunks must include "index": 0 in choices
-    with patch(
-        "omnimux.services.multiplexer.Multiplexer.generate_stream"
-    ) as mock_stream:
+    with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
         async def mock_gen(*args, **kwargs):
             yield "chunk1"
 
@@ -171,9 +167,7 @@ async def test_reproduce_anthropic_client_thinking_and_partial_json() -> None:
 
 def test_reproduce_non_data_image_url_preserved(test_client: TestClient) -> None:
     # Task 6: Non-data image URLs (http://, https://) should not become [Image: unknown_image]
-    with patch(
-        "omnimux.services.multiplexer.Multiplexer.generate_stream"
-    ) as mock_stream:
+    with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
         captured_messages = []
 
         async def mock_gen(candidate_models, messages, **kwargs):
@@ -191,7 +185,10 @@ def test_reproduce_non_data_image_url_preserved(test_client: TestClient) -> None
                     {
                         "role": "user",
                         "content": [
-                            {"type": "image_url", "image_url": {"url": "https://example.com/photo.png"}},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": "https://example.com/photo.png"},
+                            },
                             {"type": "text", "text": "What is this?"},
                         ],
                     },
