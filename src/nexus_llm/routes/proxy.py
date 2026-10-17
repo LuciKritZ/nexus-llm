@@ -16,6 +16,7 @@ from nexus_llm.models.schemas import (
 )
 from nexus_llm.services.cache import ImageCache
 from nexus_llm.services.compressor import ContextCompressor
+from nexus_llm.services.db import validate_client_key
 from nexus_llm.services.gatekeeper import Gatekeeper
 from nexus_llm.services.multiplexer import Multiplexer
 from nexus_llm.services.unloader import ModelUnloader
@@ -30,15 +31,36 @@ async def verify_auth(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(security),  # noqa: B008
 ) -> None:
+    x_api_key = request.headers.get("x-api-key")
+    token = credentials.credentials if credentials else x_api_key
+
+    db = getattr(request.app.state, "db", None)
+    if db and token:
+        is_valid = await validate_client_key(db, token)
+        if is_valid:
+            return
+
     if settings.proxy_password:
-        x_api_key = request.headers.get("x-api-key")
-        token = credentials.credentials if credentials else x_api_key
-        if token != settings.proxy_password:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing Bearer token",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        if token == settings.proxy_password:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM client_keys WHERE revoked_at IS NULL"
+        ) as cursor:
+            row = await cursor.fetchone()
+            key_count = row[0] if row else 0
+            if key_count > 0:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid or missing Bearer token",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
 
 async def _prepare_request_pipeline(
@@ -92,7 +114,7 @@ async def _prepare_request_pipeline(
         for key, config in platforms_data.items():
             if not isinstance(config, dict) or key == "system_fallback":
                 continue
-            max_tokens = config.get("max_input_tokens", 0)
+            max_tokens = config.get("max_input_tokens") or 200000
             if max_tokens < context_length:
                 continue
             if has_images_in_latest and not config.get("supports_vision"):

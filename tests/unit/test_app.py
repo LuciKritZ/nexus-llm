@@ -389,3 +389,39 @@ def test_explicit_model_with_image_skips_non_vision_candidates(client: TestClien
     }
     resp = client.post("/v1/chat/completions", json=payload)
     assert resp.status_code == 200
+
+
+def test_client_key_auth_flow(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
+    from nexus_llm.config import settings
+    from nexus_llm.services.db import create_client_key
+
+    monkeypatch.setattr(settings, "proxy_password", None)
+    app = typing.cast(typing.Any, client.app)
+    db = app.state.db
+
+    import asyncio
+
+    raw_token, _ = asyncio.run(create_client_key(db, "test-client"))
+
+    payload = {
+        "model": "claude-3-5-sonnet-20241022",
+        "messages": [{"role": "user", "content": "Hi"}],
+        "stream": False,
+    }
+
+    # Unauthorized with wrong key
+    resp_unauth = client.post("/v1/messages", json=payload, headers={"x-api-key": "nx_wrong"})
+    assert resp_unauth.status_code == 401
+
+    # Authorized with database token
+    resp_auth = client.post("/v1/messages", json=payload, headers={"x-api-key": raw_token})
+    assert resp_auth.status_code == 200
+
+
+def test_chat_completions_claude_model_prefix(client: TestClient) -> None:
+    payload = {
+        "model": "claude-custom-unconfigured",
+        "messages": [{"role": "user", "content": "Hi"}],
+    }
+    response = client.post("/v1/chat/completions", json=payload)
+    assert response.status_code == 200
