@@ -120,7 +120,8 @@ class RouterCore:
         Retrieves the best available platform and key from a list of candidates.
         Prioritizes highest `priority`, then oldest `last_used_at`.
         """
-        now = datetime.datetime.now(datetime.UTC).timestamp()
+        now_dt = datetime.datetime.now(datetime.UTC)
+        now = now_dt.timestamp()
 
         if not candidate_platforms:
             raise NoKeysAvailableError("No candidate platforms provided for dynamic routing")
@@ -164,8 +165,8 @@ class RouterCore:
 
             # Not in cooldown, update last_used_at and return
             await self.db.execute(
-                "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE key_hash = ?",
-                (key_hash,),
+                "UPDATE api_keys SET last_used_at = ? WHERE key_hash = ?",
+                (now_dt.isoformat(), key_hash),
             )
             await self.db.commit()
 
