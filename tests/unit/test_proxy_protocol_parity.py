@@ -240,3 +240,31 @@ def test_reproduce_count_tokens_includes_system_and_tools(test_client: TestClien
     )
     tokens_with_tools = res_with_tools.json()["input_tokens"]
     assert tokens_with_tools > tokens_base
+
+
+def test_anthropic_messages_endpoint_forwards_beta_header(test_client: TestClient) -> None:
+    # Verify /v1/messages forwards anthropic-beta header to extra_kwargs
+    with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
+        captured_kwargs: dict[str, Any] = {}
+
+        async def mock_gen(
+            candidate_models: list[str],
+            messages: list[dict[str, Any]],
+            **kwargs: Any,
+        ) -> AsyncGenerator[str, None]:
+            captured_kwargs.update(kwargs)
+            yield "Hello"
+
+        mock_stream.side_effect = mock_gen
+
+        res = test_client.post(
+            "/v1/messages",
+            headers={"anthropic-beta": "prompt-caching-2024-07-31"},
+            json={
+                "model": "claude-3-5-sonnet",
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": True,
+            },
+        )
+        assert res.status_code == 200
+        assert captured_kwargs.get("anthropic_beta") == "prompt-caching-2024-07-31"
