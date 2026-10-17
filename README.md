@@ -10,7 +10,7 @@
 <p align="center">
   <a href="https://pypi.org/project/omnimux/"><img src="https://img.shields.io/badge/pypi-omnimux-blue.svg?style=flat-square" alt="PyPI"></a>
   <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg?style=flat-square" alt="Python 3.12+"></a>
-  <a href="https://github.com/lucikritz/nexus-llm/actions"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
+  <a href="https://github.com/LuciKritZ/omnimux/actions"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
 </p>
 
