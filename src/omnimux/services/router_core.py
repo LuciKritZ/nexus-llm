@@ -7,12 +7,12 @@ from typing import Any
 
 import aiosqlite
 
-from omnimux.exceptions import NexusLLMError
+from omnimux.exceptions import OmniMuxError
 
 logger = logging.getLogger(__name__)
 
 
-class NoKeysAvailableError(NexusLLMError):
+class NoKeysAvailableError(OmniMuxError):
     """Raised when no API keys are available (all exhausted/cooldown)."""
 
 

@@ -110,7 +110,7 @@ async def _prepare_request_pipeline(
 
     candidates: list[str] = []
 
-    if payload.model in ("auto", "nexus-auto", "claude-auto"):
+    if payload.model in ("auto", "omnimux-auto", "omni-auto", "nexus-auto", "claude-auto"):
         for key, config in platforms_data.items():
             if not isinstance(config, dict) or key == "system_fallback":
                 continue

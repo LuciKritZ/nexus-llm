@@ -125,10 +125,10 @@ def test_chat_completions_proxy_list_content_bad_base64(client: TestClient) -> N
 
 
 @patch("omnimux.services.gatekeeper.Gatekeeper.profile_request")
-def test_chat_completions_proxy_nexus_auto(mock_profile: AsyncMock, client: TestClient) -> None:
+def test_chat_completions_proxy_omnimux_auto(mock_profile: AsyncMock, client: TestClient) -> None:
     mock_profile.return_value = {"context_length": 100, "has_image": False}
     payload = {
-        "model": "nexus-auto",
+        "model": "omnimux-auto",
         "messages": [{"role": "user", "content": "Complex query"}],
     }
 
@@ -232,7 +232,7 @@ def test_lifespan_platforms_json() -> None:
 def test_exception_handlers(client: TestClient) -> None:
     from fastapi import FastAPI
 
-    from omnimux.exceptions import CacheError, GeminiAPIError, NexusLLMError
+    from omnimux.exceptions import CacheError, GeminiAPIError, OmniMuxError
 
     app = typing.cast(FastAPI, client.app)
 
@@ -244,9 +244,9 @@ def test_exception_handlers(client: TestClient) -> None:
     async def cache_error() -> None:
         raise CacheError("Disk full")
 
-    @app.get("/test-nexus-error")
-    async def nexus_error() -> None:
-        raise NexusLLMError("Generic error")
+    @app.get("/test-omnimux-error")
+    async def omnimux_error() -> None:
+        raise OmniMuxError("Generic error")
 
     resp1 = client.get("/test-gemini-error")
     assert resp1.status_code == 502
@@ -256,7 +256,7 @@ def test_exception_handlers(client: TestClient) -> None:
     assert resp2.status_code == 500
     assert resp2.json() == {"detail": "Disk full"}
 
-    resp3 = client.get("/test-nexus-error")
+    resp3 = client.get("/test-omnimux-error")
     assert resp3.status_code == 500
     assert resp3.json() == {"detail": "Generic error"}
 

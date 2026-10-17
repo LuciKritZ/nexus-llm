@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from omnimux.config import settings
-from omnimux.exceptions import CacheError, GeminiAPIError, NexusLLMError
+from omnimux.exceptions import CacheError, GeminiAPIError, OmniMuxError
 from omnimux.routes.proxy import router as proxy_router
 from omnimux.services.cache import ImageCache
 from omnimux.services.compressor import ContextCompressor
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="nexus-llm", lifespan=lifespan)
+    app = FastAPI(title="omnimux", lifespan=lifespan)
     app.include_router(proxy_router)
 
     @app.exception_handler(GeminiAPIError)
@@ -91,8 +91,8 @@ def create_app() -> FastAPI:
             content={"detail": str(exc)},
         )
 
-    @app.exception_handler(NexusLLMError)
-    async def nexus_exception_handler(request: Request, exc: NexusLLMError) -> JSONResponse:
+    @app.exception_handler(OmniMuxError)
+    async def omnimux_exception_handler(request: Request, exc: OmniMuxError) -> JSONResponse:
         return JSONResponse(
             status_code=500,
             content={"detail": str(exc)},
