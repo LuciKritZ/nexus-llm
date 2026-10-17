@@ -5,11 +5,11 @@ from typing import Any
 
 import httpx
 
-from nexus_llm.config import settings
-from nexus_llm.exceptions import QuotaExceededError, RateLimitError
-from nexus_llm.services.adapters import AnthropicClient, OpenAICompatibleClient
-from nexus_llm.services.gemini_client import GeminiClient
-from nexus_llm.services.router_core import NoKeysAvailableError, RouterCore
+from omnimux.config import settings
+from omnimux.exceptions import QuotaExceededError, RateLimitError
+from omnimux.services.adapters import AnthropicClient, OpenAICompatibleClient
+from omnimux.services.gemini_client import GeminiClient
+from omnimux.services.router_core import NoKeysAvailableError, RouterCore
 
 logger = logging.getLogger(__name__)
 

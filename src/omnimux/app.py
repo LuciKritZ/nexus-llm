@@ -6,22 +6,22 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from nexus_llm.config import settings
-from nexus_llm.exceptions import CacheError, GeminiAPIError, NexusLLMError
-from nexus_llm.routes.proxy import router as proxy_router
-from nexus_llm.services.cache import ImageCache
-from nexus_llm.services.compressor import ContextCompressor
-from nexus_llm.services.db import (
+from omnimux.config import settings
+from omnimux.exceptions import CacheError, GeminiAPIError, OmniMuxError
+from omnimux.routes.proxy import router as proxy_router
+from omnimux.services.cache import ImageCache
+from omnimux.services.compressor import ContextCompressor
+from omnimux.services.db import (
     auto_import_from_json_if_empty,
     get_all_platforms_and_models,
     init_db,
 )
-from nexus_llm.services.gatekeeper import Gatekeeper
-from nexus_llm.services.gemini_client import GeminiClient
-from nexus_llm.services.multiplexer import Multiplexer
-from nexus_llm.services.router_core import RouterCore
-from nexus_llm.services.sync import sync_keys_from_json
-from nexus_llm.services.unloader import ModelUnloader
+from omnimux.services.gatekeeper import Gatekeeper
+from omnimux.services.gemini_client import GeminiClient
+from omnimux.services.multiplexer import Multiplexer
+from omnimux.services.router_core import RouterCore
+from omnimux.services.sync import sync_keys_from_json
+from omnimux.services.unloader import ModelUnloader
 
 
 @asynccontextmanager
@@ -74,7 +74,7 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="nexus-llm", lifespan=lifespan)
+    app = FastAPI(title="omnimux", lifespan=lifespan)
     app.include_router(proxy_router)
 
     @app.exception_handler(GeminiAPIError)
@@ -91,8 +91,8 @@ def create_app() -> FastAPI:
             content={"detail": str(exc)},
         )
 
-    @app.exception_handler(NexusLLMError)
-    async def nexus_exception_handler(request: Request, exc: NexusLLMError) -> JSONResponse:
+    @app.exception_handler(OmniMuxError)
+    async def omnimux_exception_handler(request: Request, exc: OmniMuxError) -> JSONResponse:
         return JSONResponse(
             status_code=500,
             content={"detail": str(exc)},

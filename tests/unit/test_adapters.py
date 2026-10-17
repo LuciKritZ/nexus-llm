@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from nexus_llm.exceptions import QuotaExceededError, RateLimitError
-from nexus_llm.services.adapters import AnthropicClient, BaseLLMClient, OpenAICompatibleClient
+from omnimux.exceptions import QuotaExceededError, RateLimitError
+from omnimux.services.adapters import AnthropicClient, BaseLLMClient, OpenAICompatibleClient
 
 
 @pytest.fixture

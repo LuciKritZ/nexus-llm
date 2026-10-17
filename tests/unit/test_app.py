@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from nexus_llm.app import create_app
+from omnimux.app import create_app
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
         yield " World"
 
     monkeypatch.setattr(
-        "nexus_llm.services.multiplexer.Multiplexer.generate_stream", mock_generate_stream
+        "omnimux.services.multiplexer.Multiplexer.generate_stream", mock_generate_stream
     )
 
     # We also need to mock post for the unloader
@@ -87,7 +87,7 @@ def test_chat_completions_proxy_list_content(client: TestClient) -> None:
         ],
     }
 
-    with patch("nexus_llm.services.cache.ImageCache.store") as mock_store:
+    with patch("omnimux.services.cache.ImageCache.store") as mock_store:
         response = client.post("/v1/chat/completions", json=payload)
 
     assert response.status_code == 200
@@ -114,7 +114,7 @@ def test_chat_completions_proxy_list_content_bad_base64(client: TestClient) -> N
         ],
     }
 
-    with patch("nexus_llm.services.cache.ImageCache.store") as mock_store:
+    with patch("omnimux.services.cache.ImageCache.store") as mock_store:
         response = client.post("/v1/chat/completions", json=payload)
 
     assert response.status_code == 200
@@ -124,11 +124,11 @@ def test_chat_completions_proxy_list_content_bad_base64(client: TestClient) -> N
     mock_store.assert_not_called()
 
 
-@patch("nexus_llm.services.gatekeeper.Gatekeeper.profile_request")
-def test_chat_completions_proxy_nexus_auto(mock_profile: AsyncMock, client: TestClient) -> None:
+@patch("omnimux.services.gatekeeper.Gatekeeper.profile_request")
+def test_chat_completions_proxy_omnimux_auto(mock_profile: AsyncMock, client: TestClient) -> None:
     mock_profile.return_value = {"context_length": 100, "has_image": False}
     payload = {
-        "model": "nexus-auto",
+        "model": "omnimux-auto",
         "messages": [{"role": "user", "content": "Complex query"}],
     }
 
@@ -139,7 +139,7 @@ def test_chat_completions_proxy_nexus_auto(mock_profile: AsyncMock, client: Test
 
 def test_chat_completions_proxy_unauthorized(client: TestClient) -> None:
     # Setup test with a password
-    with patch("nexus_llm.routes.proxy.settings.proxy_password", "my_secret"):
+    with patch("omnimux.routes.proxy.settings.proxy_password", "my_secret"):
         response = client.post(
             "/v1/chat/completions",
             json={
@@ -152,7 +152,7 @@ def test_chat_completions_proxy_unauthorized(client: TestClient) -> None:
         assert response.json() == {"detail": "Invalid or missing Bearer token"}
 
 
-@patch("nexus_llm.services.gatekeeper.Gatekeeper.profile_request")
+@patch("omnimux.services.gatekeeper.Gatekeeper.profile_request")
 def test_chat_completions_proxy_coverage(mock_profile: AsyncMock, client: TestClient) -> None:
     app = typing.cast(typing.Any, client.app)
     app.state.platforms = {
@@ -208,7 +208,7 @@ def test_lifespan_platforms_json() -> None:
 
     from fastapi.testclient import TestClient
 
-    from nexus_llm.app import create_app
+    from omnimux.app import create_app
 
     # 1. platforms.json exists and is valid
     app = create_app()
@@ -232,7 +232,7 @@ def test_lifespan_platforms_json() -> None:
 def test_exception_handlers(client: TestClient) -> None:
     from fastapi import FastAPI
 
-    from nexus_llm.exceptions import CacheError, GeminiAPIError, NexusLLMError
+    from omnimux.exceptions import CacheError, GeminiAPIError, OmniMuxError
 
     app = typing.cast(FastAPI, client.app)
 
@@ -244,9 +244,9 @@ def test_exception_handlers(client: TestClient) -> None:
     async def cache_error() -> None:
         raise CacheError("Disk full")
 
-    @app.get("/test-nexus-error")
-    async def nexus_error() -> None:
-        raise NexusLLMError("Generic error")
+    @app.get("/test-omnimux-error")
+    async def omnimux_error() -> None:
+        raise OmniMuxError("Generic error")
 
     resp1 = client.get("/test-gemini-error")
     assert resp1.status_code == 502
@@ -256,7 +256,7 @@ def test_exception_handlers(client: TestClient) -> None:
     assert resp2.status_code == 500
     assert resp2.json() == {"detail": "Disk full"}
 
-    resp3 = client.get("/test-nexus-error")
+    resp3 = client.get("/test-omnimux-error")
     assert resp3.status_code == 500
     assert resp3.json() == {"detail": "Generic error"}
 
@@ -344,7 +344,7 @@ def test_list_models_endpoint(client: TestClient) -> None:
 
 
 def test_anthropic_auth(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
-    from nexus_llm.config import settings
+    from omnimux.config import settings
 
     monkeypatch.setattr(settings, "proxy_password", "secret-password")
 
@@ -392,8 +392,8 @@ def test_explicit_model_with_image_skips_non_vision_candidates(client: TestClien
 
 
 def test_client_key_auth_flow(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:
-    from nexus_llm.config import settings
-    from nexus_llm.services.db import create_client_key
+    from omnimux.config import settings
+    from omnimux.services.db import create_client_key
 
     monkeypatch.setattr(settings, "proxy_password", None)
     app = typing.cast(typing.Any, client.app)

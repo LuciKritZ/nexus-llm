@@ -1,10 +1,11 @@
-from nexus_llm.exceptions import CacheError, GeminiAPIError, NexusLLMError
+from omnimux.exceptions import CacheError, GeminiAPIError, NexusLLMError, OmniMuxError
 
 
-def test_nexus_llm_error() -> None:
-    error = NexusLLMError("base error")
+def test_omnimux_error() -> None:
+    error = OmniMuxError("base error")
     assert str(error) == "base error"
     assert isinstance(error, Exception)
+    assert NexusLLMError is OmniMuxError
 
 
 def test_gemini_api_error() -> None:

@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     port: int = 11444
 
-    sqlite_db_path: str = "nexus_llm_state.db"
+    sqlite_db_path: str = "omnimux_state.db"
     models_json_path: str = "models.json"
     default_cooldown_minutes: int = 60
     image_token_reserve: int = 4096

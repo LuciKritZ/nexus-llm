@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from nexus_llm.exceptions import CacheError
-from nexus_llm.services.cache import ImageCache
+from omnimux.exceptions import CacheError
+from omnimux.services.cache import ImageCache
 
 
 def test_cache_creation_success(tmp_path: Path) -> None:
@@ -86,7 +86,7 @@ def test_clear_cache_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) ->
 
 def test_offload_logic(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     # Reduce max size to 10 bytes for testing
-    import nexus_llm.services.cache as cache_module
+    import omnimux.services.cache as cache_module
 
     monkeypatch.setattr(cache_module, "MAX_CACHE_SIZE_BYTES", 10)
 
@@ -137,7 +137,7 @@ def test_offload_read_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -
 
 
 def test_offload_unlink_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    import nexus_llm.services.cache as cache_module
+    import omnimux.services.cache as cache_module
 
     monkeypatch.setattr(cache_module, "MAX_CACHE_SIZE_BYTES", 10)
 

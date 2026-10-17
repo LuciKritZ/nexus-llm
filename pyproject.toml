@@ -1,7 +1,7 @@
 [project]
-name = "nexus-llm"
+name = "omnimux"
 version = "0.1.0"
-description = "Local VRAM proxy for Ollama with Vision API offloading"
+description = "Local intelligent LLM multiplexer, proxy, and router"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -16,8 +16,10 @@ dependencies = [
 ]
 
 [project.scripts]
-nexus = "nexus_llm.__main__:main"
-nexus-llm = "nexus_llm.__main__:main"
+omnimux = "omnimux.__main__:main"
+omni = "omnimux.__main__:main"
+nexus = "omnimux.__main__:main"
+nexus-llm = "omnimux.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -42,7 +44,7 @@ line-length = 100
 select = ["E", "W", "F", "I", "N", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["nexus_llm"]
+known-first-party = ["omnimux"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -52,7 +54,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [tool.coverage.run]
-source = ["nexus_llm"]
+source = ["omnimux"]
 
 [tool.coverage.report]
 fail_under = 100

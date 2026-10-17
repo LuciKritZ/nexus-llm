@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from nexus_llm.utils.cli_checklist import run_checklist
+from omnimux.utils.cli_checklist import run_checklist
 
 
 def test_checklist_empty() -> None:

@@ -1,85 +1,154 @@
-# nexus-llm
+<p align="center">
+  <img src="assets/omnimux-banner.png" alt="omnimux banner" width="100%">
+</p>
 
-`nexus-llm` is a database-first local API proxy and intelligent LLM router designed for developers running advanced models across local and cloud providers with unified client management.
+<p align="center">
+  <strong>The adaptive local multiplexer and fallback gateway for LLM coding agents.</strong><br>
+  One endpoint. Any agent. Zero downtime.
+</p>
 
-It intercepts incoming JSON-RPC chat completion payloads and Anthropic `/v1/messages` requests from tools and IDE extensions (Claude Code, RooCode, Continue, Open WebUI) and intelligently routes them between local Ollama instances, Anthropic, Gemini, and OpenAI-compatible providers (OpenRouter, TokenHarbor, etc.).
+<p align="center">
+  <a href="https://pypi.org/project/omnimux/"><img src="https://img.shields.io/badge/pypi-omnimux-blue.svg?style=flat-square" alt="PyPI"></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.12%2B-blue.svg?style=flat-square" alt="Python 3.12+"></a>
+  <a href="https://github.com/lucikritz/nexus-llm/actions"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen.svg?style=flat-square" alt="Coverage"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License"></a>
+</p>
 
-## Key Features
+---
 
-1. **Database-First State with JSON Export:** Platform endpoints, upstream keys, and model registries are stored in SQLite (`nexus_llm_state.db`). Legacy `models.json` is auto-imported on first launch, and state can be exported on-demand via `nexus export <file.json>`.
-2. **Interactive Model Discovery:** `nexus model add` interactively queries upstream `/v1/models` endpoints and lets you pick models to register using a terminal checklist or manual entry.
-3. **Dynamic Client API Keys:** Generate application tokens with `nexus keys create [name]`. Tokens start with `nx_...` and can be inspected or revoked via `nexus keys list` and `nexus keys revoke <id>`.
-4. **Detached Background Execution:** Start the proxy as a background daemon with `nexus start -d` and shut it down cleanly with `nexus stop`.
-5. **Intelligent Capability Routing & Multiplexing:** Deterministically routes requests by vision support and context window, hot-swapping platforms/keys transparently upon quota limits (429) or failures.
-6. **Native Anthropic & OpenAI Protocol Support:** Supports both OpenAI `/v1/chat/completions` and Anthropic `/v1/messages` endpoints with full SSE streaming and token counting.
-7. **Automated VRAM Unloading:** Automatically unloads idle local Ollama models (`keep_alive: 0`) before loading new ones to prevent out-of-memory crashes.
-8. **Context Compressor & Cache:** Strips boilerplate HTML tags from web search results and caches image descriptions by SHA-256 hash.
+## What is omnimux?
 
-## Installation & CLI Usage
+When coding agents (Claude Code, Cursor, RooCode, Continue, Open WebUI, Aider) hit rate limits (`429`), credit exhaustion (`402`), or local VRAM out-of-memory errors, tasks break mid-refactor.
 
-Install directly or run via `uv`:
+**omnimux** is a lightweight, database-first local gateway that sits between your coding tools and your LLM backends. It translates between OpenAI and Anthropic protocols, multiplexes API keys across providers, automatically hot-swaps to fallbacks upon failure, and unloads idle local models before loading new ones.
 
-```bash
-# Install in editable mode or into your environment
-uv pip install -e .
-
-# Or run via uvx
-uvx nexus-llm --help
+```
+Coding Agents (Claude Code, Cursor, RooCode, Continue, Aider)
+                              │
+                    [ omnimux gateway ]
+                              │
+   ┌───────────────┬──────────┴────────┬─────────────┬──────────┐
+   ▼               ▼                   ▼             ▼          ▼
+Anthropic      OpenRouter            Gemini         Groq      Ollama
+(Claude 3.5)   (Failover pool)     (Long context) (Fast)   (Local zero-OOM)
 ```
 
-### CLI Commands
+---
+
+## Compatible Extensions & Agents
+
+omnimux exposes standard OpenAI (`/v1/chat/completions`) and Anthropic (`/v1/messages`) endpoints, making it a drop-in replacement across tools:
+
+| Agent / Tool | Protocol | Configuration |
+| :--- | :--- | :--- |
+| **Claude Code** | Native Anthropic (`/v1/messages`) | `export ANTHROPIC_BASE_URL="http://localhost:11444"`<br>`export ANTHROPIC_API_KEY="om_your_client_token"` |
+| **Cursor** | OpenAI Compatible (`/v1`) | Base URL: `http://localhost:11444/v1`<br>API Key: `om_your_client_token` |
+| **RooCode / Cline** | OpenAI / Anthropic format | Base URL: `http://localhost:11444/v1` or Anthropic Base URL |
+| **Continue.dev** | OpenAI / Anthropic format | `apiBase: "http://localhost:11444/v1"` in `config.yaml` |
+| **Open WebUI** | OpenAI Compatible (`/v1`) | Connections &rarr; OpenAI API: `http://localhost:11444/v1` |
+| **Aider** | OpenAI Compatible (`/v1`) | `export OPENAI_API_BASE="http://localhost:11444/v1"`<br>`export OPENAI_API_KEY="om_your_client_token"` |
+
+---
+
+## Core Features
+
+- 🔄 **Autonomous 429 Hot-Swapping**: Automatically cycles through backup API keys and provider fallbacks with intelligent backoff cooldowns when an upstream service rate-limits or fails.
+- 🦙 **Zero-OOM Ollama Engine**: Issues `keep_alive: 0` unloads for idle local models prior to spinning up fresh models, preventing out-of-memory crashes on unified-memory Apple Silicon and CUDA GPUs.
+- ⚡ **Dual Protocol Translation**: Complete bidirectional translation between Anthropic `/v1/messages` and OpenAI `/v1/chat/completions` with full SSE streaming and token count endpoints.
+- 🗜️ **Context Optimizer**: Converts bulky HTML pages from agent web searches into lean markdown and deduplicates multimodal vision images with local SHA-256 caching.
+- 🔐 **Scoped Client Keys**: Generate isolated client tokens (`om_...`) per IDE extension with local database tracking, usage timestamps, and instant revocation.
+- 📦 **Daemon & Single-Binary Simplicity**: Run seamlessly as a background service via `omnimux start -d` or inspect active logs with `omnimux status`.
+
+---
+
+## Quickstart
+
+### 1. Installation
+
+Run via `uvx` (no installation required) or install with `pip`/`uv`:
 
 ```bash
-# 1. Start the proxy server (foreground)
-nexus start --port 11444
+# Run immediately via uvx
+uvx omnimux --help
 
-# Start in detached / background mode
-nexus start -d --port 11444
-
-# Stop detached proxy server
-nexus stop
-
-# 2. Interactively discover and register upstream platforms/models
-nexus model add
-
-# List all configured models and endpoints
-nexus model list
-
-# 3. Create client API keys for tools (Claude Code, Continue, etc.)
-nexus keys create claude-code
-nexus keys list
-nexus keys revoke <id_or_prefix>
-
-# 4. Export database configuration to JSON
-nexus export ~/Documents/nexus_config.json
-
-# 5. Clear image cache
-nexus cache --clear
+# Or install globally into your environment
+uv pip install omnimux
 ```
 
-### Client Setup (Claude Code & IDEs)
+*(Note: `omni`, `nexus`, and `nexus-llm` are registered aliases for all CLI commands.)*
 
-Configure Claude Code or your IDE client using a client key generated via `nexus keys create`:
+### 2. Discover & Register Models
+
+Interactively discover and register models from local Ollama or upstream providers:
 
 ```bash
-# Generate a key
-nexus keys create claude-code
-# Example output: nx_XhfQ3XGeEezC5YBvHRjmX31CeES1b3jHXINMms1bW9Y
+omnimux model add
+```
 
-# Use with Claude Code
-export ANTHROPIC_BASE_URL="http://127.0.0.1:11444"
-export ANTHROPIC_API_KEY="nx_XhfQ3XGeEezC5YBvHRjmX31CeES1b3jHXINMms1bW9Y"
+### 3. Start the Gateway
+
+```bash
+# Start in the foreground
+omnimux start --port 11444
+
+# Or start as a background daemon
+omnimux start -d --port 11444
+
+# Check status or stop
+omnimux status
+omnimux stop
+```
+
+### 4. Create an Agent Token
+
+Create an isolated client key for your coding agent:
+
+```bash
+omnimux keys create claude-code
+# Output: om_k9A2x...
+```
+
+Then point your agent:
+
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:11444"
+export ANTHROPIC_API_KEY="om_k9A2x..."
 claude
 ```
 
+---
+
+## CLI Reference
+
+| Command | Description |
+| :--- | :--- |
+| `omnimux start [--port PORT] [-d]` | Start the gateway server (foreground or daemon) |
+| `omnimux stop` | Terminate running daemon process |
+| `omnimux status` | Inspect health, PID, and port of running daemon |
+| `omnimux model add` | Interactively query and register upstream models |
+| `omnimux model list` | List registered platform models and endpoints |
+| `omnimux keys create [name]` | Generate a client API token (`om_...`) |
+| `omnimux keys list` | List active client keys and last used timestamps |
+| `omnimux keys revoke <id>` | Revoke a client key |
+| `omnimux export <file.json>` | Export entire SQLite routing state to JSON |
+| `omnimux cache --clear` | Purge local image and request cache |
+
+---
+
 ## Configuration
 
-Configuration can also be passed via `.env`:
+Settings can be overridden via environment variables or a local `.env` file:
 
 ```env
 PORT=11444
-SQLITE_DB_PATH=nexus_llm_state.db
+SQLITE_DB_PATH=omnimux_state.db
 PROXY_PASSWORD=optional_fallback_password
 ```
 
-If client keys exist in SQLite, incoming requests must provide an active `nx_...` key (or `PROXY_PASSWORD` if configured) via `Authorization: Bearer <token>` or `x-api-key: <token>`.
+Legacy `nx_...` keys and existing SQLite states are automatically recognized and supported for backwards compatibility.
+
+---
+
+## License
+
+MIT &copy; LuciKritZ

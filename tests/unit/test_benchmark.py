@@ -6,7 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from nexus_llm.app import create_app
+from omnimux.app import create_app
 
 
 @pytest.fixture

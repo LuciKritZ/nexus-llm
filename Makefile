@@ -10,6 +10,6 @@ typecheck:
 	uv run mypy .
 
 test:
-	uv run pytest --cov=nexus_llm
+	uv run pytest --cov=omnimux
 
 check: format typecheck test

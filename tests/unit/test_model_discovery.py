@@ -6,8 +6,8 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from nexus_llm.services.db import init_db
-from nexus_llm.services.model_discovery import (
+from omnimux.services.db import init_db
+from omnimux.services.model_discovery import (
     fetch_upstream_models,
     list_configured_models,
     run_add_model_wizard,
@@ -67,12 +67,12 @@ async def test_run_add_model_wizard_success(memory_db: aiosqlite.Connection) -> 
     mock_models = [{"id": "m1", "name": "Model 1", "max_input_tokens": 128000}]
     with (
         patch(
-            "nexus_llm.services.model_discovery.fetch_upstream_models",
+            "omnimux.services.model_discovery.fetch_upstream_models",
             AsyncMock(return_value=mock_models),
         ),
         patch("builtins.input", side_effect=["testplat", "1", "https://api.test", "testkey"]),
         patch(
-            "nexus_llm.services.model_discovery.run_checklist",
+            "omnimux.services.model_discovery.run_checklist",
             MagicMock(return_value=["m1"]),
         ),
     ):
@@ -88,7 +88,7 @@ async def test_run_add_model_wizard_success(memory_db: aiosqlite.Connection) -> 
 async def test_run_add_model_wizard_manual_fallback(memory_db: aiosqlite.Connection) -> None:
     with (
         patch(
-            "nexus_llm.services.model_discovery.fetch_upstream_models",
+            "omnimux.services.model_discovery.fetch_upstream_models",
             AsyncMock(side_effect=Exception("Connection refused")),
         ),
         patch(
@@ -96,7 +96,7 @@ async def test_run_add_model_wizard_manual_fallback(memory_db: aiosqlite.Connect
             side_effect=["errplat", "2", "https://api.test", "key", "manual-model"],
         ),
         patch(
-            "nexus_llm.services.model_discovery.run_checklist",
+            "omnimux.services.model_discovery.run_checklist",
             MagicMock(return_value=["manual-model"]),
         ),
     ):
@@ -112,7 +112,7 @@ async def test_run_add_model_wizard_manual_fallback(memory_db: aiosqlite.Connect
 async def test_run_add_model_wizard_abort_empty(memory_db: aiosqlite.Connection) -> None:
     with (
         patch(
-            "nexus_llm.services.model_discovery.fetch_upstream_models",
+            "omnimux.services.model_discovery.fetch_upstream_models",
             AsyncMock(return_value=[]),
         ),
         patch("builtins.input", side_effect=["emptyplat", "1", "https://api.test", "key"]),
@@ -134,7 +134,7 @@ async def test_list_configured_models(
     assert "No models configured yet" in capsys.readouterr().out
 
     # 2. Populated
-    from nexus_llm.services.db import save_platform_and_models
+    from omnimux.services.db import save_platform_and_models
 
     await save_platform_and_models(
         memory_db, "openrouter", "https://api", "openai", [{"id": "gpt-4"}]
@@ -159,7 +159,7 @@ async def test_fetch_upstream_models_unexpected_json() -> None:
 async def test_run_add_model_wizard_manual_abort(memory_db: aiosqlite.Connection) -> None:
     with (
         patch(
-            "nexus_llm.services.model_discovery.fetch_upstream_models",
+            "omnimux.services.model_discovery.fetch_upstream_models",
             AsyncMock(side_effect=Exception("Connection refused")),
         ),
         patch(
@@ -175,12 +175,12 @@ async def test_run_add_model_wizard_none_selected(memory_db: aiosqlite.Connectio
     mock_models = [{"id": "m1", "name": "Model 1"}]
     with (
         patch(
-            "nexus_llm.services.model_discovery.fetch_upstream_models",
+            "omnimux.services.model_discovery.fetch_upstream_models",
             AsyncMock(return_value=mock_models),
         ),
         patch("builtins.input", side_effect=["plat", "1", "https://api.test", "key"]),
         patch(
-            "nexus_llm.services.model_discovery.run_checklist",
+            "omnimux.services.model_discovery.run_checklist",
             MagicMock(return_value=[]),
         ),
     ):

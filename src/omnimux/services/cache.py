@@ -1,7 +1,7 @@
 import hashlib
 from pathlib import Path
 
-from nexus_llm.exceptions import CacheError
+from omnimux.exceptions import CacheError
 
 # 500 MB in bytes
 MAX_CACHE_SIZE_BYTES = 500 * 1024 * 1024
@@ -10,7 +10,7 @@ MAX_CACHE_SIZE_BYTES = 500 * 1024 * 1024
 class ImageCache:
     """Handles local disk caching for multimodal images with LRU eviction."""
 
-    def __init__(self, cache_dir: Path | str = "~/.nexus-llm/cache") -> None:
+    def __init__(self, cache_dir: Path | str = "~/.omnimux/cache") -> None:
         self.cache_dir = Path(cache_dir).expanduser()
         try:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
