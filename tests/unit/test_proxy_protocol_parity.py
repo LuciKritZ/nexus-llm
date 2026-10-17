@@ -1,5 +1,6 @@
 import json
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -31,7 +32,7 @@ def test_reproduce_stream_false_chat_completions(test_client: TestClient) -> Non
     # not text/event-stream StreamingResponse
     with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
 
-        async def mock_gen(*args, **kwargs):
+        async def mock_gen(*args: Any, **kwargs: Any) -> AsyncGenerator[str, None]:
             yield "Hello"
             yield " world"
 
@@ -78,7 +79,7 @@ def test_reproduce_openai_sse_chunk_has_index(test_client: TestClient) -> None:
     # Task 3: OpenAI SSE chunks must include "index": 0 in choices
     with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
 
-        async def mock_gen(*args, **kwargs):
+        async def mock_gen(*args: Any, **kwargs: Any) -> AsyncGenerator[str, None]:
             yield "chunk1"
 
         mock_stream.return_value = mock_gen()
@@ -111,7 +112,7 @@ async def test_reproduce_anthropic_client_forwards_anthropic_beta() -> None:
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
 
-        async def aiter_lines():
+        async def aiter_lines() -> AsyncGenerator[str, None]:
             yield (
                 'data: {"type": "content_block_delta", "delta": '
                 '{"type": "text_delta", "text": "ok"}}'
@@ -141,7 +142,7 @@ async def test_reproduce_anthropic_client_thinking_and_partial_json() -> None:
         mock_resp = AsyncMock()
         mock_resp.status_code = 200
 
-        async def aiter_lines():
+        async def aiter_lines() -> AsyncGenerator[str, None]:
             yield (
                 'data: {"type": "content_block_delta", "delta": '
                 '{"type": "thinking_delta", "thinking": "Let me think."}}'
@@ -175,7 +176,11 @@ def test_reproduce_non_data_image_url_preserved(test_client: TestClient) -> None
     with patch("omnimux.services.multiplexer.Multiplexer.generate_stream") as mock_stream:
         captured_messages = []
 
-        async def mock_gen(candidate_models, messages, **kwargs):
+        async def mock_gen(
+            candidate_models: list[str],
+            messages: list[dict[str, Any]],
+            **kwargs: Any,
+        ) -> AsyncGenerator[str, None]:
             captured_messages.extend(messages)
             yield "Analysis"
 
