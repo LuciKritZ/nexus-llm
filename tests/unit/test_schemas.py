@@ -92,4 +92,3 @@ def test_convert_anthropic_preserves_tools_and_top_p() -> None:
     converted = convert_anthropic_to_chat_completion(req)
     assert getattr(converted, "tools", None) == tools
     assert getattr(converted, "top_p", None) == 0.9
-

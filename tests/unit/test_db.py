@@ -242,4 +242,3 @@ async def test_revoke_client_key_escapes_wildcards(memory_db: aiosqlite.Connecti
         rows = list(await cursor.fetchall())
         assert rows[0][1] is not None
         assert rows[1][1] is None
-

@@ -368,4 +368,3 @@ async def test_anthropic_client_thinking_and_partial_json() -> None:
         assert "Let me think." in chunks
         assert '{"arg": 1}' in chunks
         assert "Done" in chunks
-

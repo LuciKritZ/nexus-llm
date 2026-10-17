@@ -215,10 +215,10 @@ async def test_standardized_iso_timestamps(memory_db: aiosqlite.Connection) -> N
     await memory_db.commit()
 
     platform, key = await router.get_best_platform_and_key(["openrouter"])
+    assert platform == "openrouter"
     assert key["key_hash"] == "h1"
     async with memory_db.execute("SELECT last_used_at FROM api_keys WHERE key_hash = 'h1'") as cur:
         row = await cur.fetchone()
         assert row is not None
         ts = row[0]
         assert "T" in ts, f"Timestamp {ts} must be ISO format with T for proper SQLite ordering"
-
