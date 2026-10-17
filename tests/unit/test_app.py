@@ -38,6 +38,7 @@ def test_chat_completions_proxy(client: TestClient) -> None:
     payload = {
         "model": "qwen",
         "messages": [{"role": "user", "content": "<html><body>Hi</body></html>"}],
+        "stream": True,
     }
     # This should trigger the unloader, then the compressor, and then stream the response.
     response = client.post("/v1/chat/completions", json=payload)
@@ -85,6 +86,7 @@ def test_chat_completions_proxy_list_content(client: TestClient) -> None:
                 ],
             }
         ],
+        "stream": True,
     }
 
     with patch("omnimux.services.cache.ImageCache.store") as mock_store:

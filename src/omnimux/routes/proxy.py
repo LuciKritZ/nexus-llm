@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import time
 import typing
 import uuid
 
@@ -104,6 +105,9 @@ async def _prepare_request_pipeline(
                             cached_hashes[id(part)] = image_hash
                         except Exception:
                             pass
+                    elif url.startswith(("http://", "https://")):
+                        image_hash = cache.hash_image(url)
+                        cached_hashes[id(part)] = image_hash
 
                     if i != latest_msg_index:
                         part.type = "text"
@@ -177,12 +181,45 @@ async def _prepare_request_pipeline(
 @router.post("/v1/chat/completions", dependencies=[Depends(verify_auth)])
 async def chat_completions(
     fastapi_req: Request, payload: ChatCompletionRequest
-) -> StreamingResponse:
+) -> Response:
     multiplexer: Multiplexer = fastapi_req.app.state.multiplexer
-    candidates, payload_dict, _ = await _prepare_request_pipeline(payload, fastapi_req)
+    candidates, payload_dict, context_length = await _prepare_request_pipeline(payload, fastapi_req)
+    extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
+
+    if not payload.stream:
+        content_parts: list[str] = []
+        async for chunk in multiplexer.generate_stream(
+            candidate_models=candidates,
+            messages=payload_dict.get("messages", []),
+            **extra_kwargs,
+        ):
+            content_parts.append(chunk)
+
+        full_content = "".join(content_parts)
+        completion_response = {
+            "id": f"chatcmpl-{uuid.uuid4().hex[:24]}",
+            "object": "chat.completion",
+            "created": int(time.time()),
+            "model": payload.model,
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": full_content,
+                    },
+                    "finish_reason": "stop",
+                }
+            ],
+            "usage": {
+                "prompt_tokens": max(1, context_length),
+                "completion_tokens": max(1, len(full_content) // 4),
+                "total_tokens": max(1, context_length) + max(1, len(full_content) // 4),
+            },
+        }
+        return JSONResponse(content=completion_response)
 
     async def sse_wrapper() -> typing.AsyncGenerator[bytes, None]:
-        extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
         async for chunk in multiplexer.generate_stream(
             candidate_models=candidates,
             messages=payload_dict.get("messages", []),
@@ -191,7 +228,7 @@ async def chat_completions(
             openai_chunk = {
                 "id": "chatcmpl-dynamic",
                 "object": "chat.completion.chunk",
-                "choices": [{"delta": {"content": chunk}}],
+                "choices": [{"index": 0, "delta": {"content": chunk}}],
             }
             yield f"data: {json.dumps(openai_chunk)}\n\n".encode()
         yield b"data: [DONE]\n\n"
@@ -210,6 +247,8 @@ async def anthropic_messages(fastapi_req: Request, payload: AnthropicMessagesReq
         chat_req, fastapi_req
     )
     extra_kwargs = {k: v for k, v in payload_dict.items() if k not in ("model", "messages")}
+    if "anthropic-beta" in fastapi_req.headers:
+        extra_kwargs["anthropic_beta"] = fastapi_req.headers["anthropic-beta"]
     msg_id = f"msg_{uuid.uuid4().hex[:24]}"
 
     if payload.stream:
@@ -306,7 +345,9 @@ async def count_tokens(fastapi_req: Request, payload: AnthropicMessagesRequest) 
     profile = await fastapi_req.app.state.gatekeeper.profile_request(
         chat_req.model_dump(exclude_none=True)
     )
-    return JSONResponse(content={"input_tokens": profile.get("context_length", 0)})
+    base_length = profile.get("context_length", 0)
+    tools_length = sum(len(json.dumps(t)) for t in payload.tools) if payload.tools else 0
+    return JSONResponse(content={"input_tokens": base_length + tools_length})
 
 
 @router.get("/v1/models", dependencies=[Depends(verify_auth)])

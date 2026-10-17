@@ -29,6 +29,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: float | None = None
     max_tokens: int | None = None
     keep_alive: int | str | None = None
+    tools: list[dict[str, Any]] | None = None
+    top_p: float | None = None
 
 
 class AnthropicMessage(BaseModel):
@@ -120,4 +122,6 @@ def convert_anthropic_to_chat_completion(
         stream=req.stream,
         max_tokens=req.max_tokens,
         temperature=req.temperature,
+        tools=req.tools,
+        top_p=req.top_p,
     )
