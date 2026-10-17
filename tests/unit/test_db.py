@@ -140,13 +140,26 @@ async def test_auto_import_from_json_if_empty(
                         "protocol": "anthropic",
                     },
                 }
-            ]
+            ],
+            "anotherplat": [
+                {
+                    "key_value": "tok_456",
+                    "meta": {
+                        "api_base": "https://api.another.com",
+                        "protocol": "openai",
+                    },
+                }
+            ],
         },
         "models": {
             "tokenharbor/sonnet": {
                 "max_input_tokens": 100000,
                 "supports_vision": True,
                 "apiBase": "https://api.tokenharbor.com",
+            },
+            "anotherplat/model1": {
+                "max_input_tokens": 80000,
+                "supports_vision": False,
             },
             "invalid_no_slash": "not_dict",
             "no_slash_dict": {"max_input_tokens": 1000},
