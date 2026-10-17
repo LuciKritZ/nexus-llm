@@ -11,22 +11,22 @@ from typing import Any
 import aiosqlite
 import uvicorn
 
-from nexus_llm.config import settings
-from nexus_llm.services.cache import ImageCache
-from nexus_llm.services.db import (
+from omnimux.config import settings
+from omnimux.services.cache import ImageCache
+from omnimux.services.db import (
     create_client_key,
     export_configuration,
     init_db,
     list_client_keys,
     revoke_client_key,
 )
-from nexus_llm.services.model_discovery import (
+from omnimux.services.model_discovery import (
     list_configured_models,
     run_add_model_wizard,
 )
 
-PID_FILE = Path(".nexus.pid")
-LOG_FILE = Path("nexus.log")
+PID_FILE = Path(".omnimux.pid")
+LOG_FILE = Path("omnimux.log")
 
 
 async def _get_db() -> aiosqlite.Connection:
@@ -45,33 +45,33 @@ def handle_start(args: Any) -> None:
             try:
                 old_pid = int(PID_FILE.read_text(encoding="utf-8").strip())
                 os.kill(old_pid, 0)
-                print(f"Nexus proxy is already running (PID: {old_pid}). Run 'nexus stop' first.")
+                print(f"Omnimux proxy is already running (PID: {old_pid}). Run 'omnimux stop' first.")
                 return
             except (OSError, ValueError):
                 PID_FILE.unlink(missing_ok=True)
 
         with open(LOG_FILE, "a", encoding="utf-8") as log_out:
             proc = subprocess.Popen(
-                [sys.executable, "-m", "nexus_llm", "start", "--host", host, "--port", str(port)],
+                [sys.executable, "-m", "omnimux", "start", "--host", host, "--port", str(port)],
                 stdout=log_out,
                 stderr=log_out,
                 start_new_session=True,
             )
         PID_FILE.write_text(str(proc.pid), encoding="utf-8")
-        print(f"Nexus proxy started in detached mode (PID: {proc.pid}). Logs: {LOG_FILE}")
+        print(f"Omnimux proxy started in detached mode (PID: {proc.pid}). Logs: {LOG_FILE}")
         return
 
-    uvicorn.run("nexus_llm.app:create_app", host=host, port=port, factory=True)
+    uvicorn.run("omnimux.app:create_app", host=host, port=port, factory=True)
 
 
 def handle_stop(args: Any = None) -> None:
     if not PID_FILE.exists():
-        print("No active Nexus PID file found.")
+        print("No active Omnimux PID file found.")
         return
     try:
         pid = int(PID_FILE.read_text(encoding="utf-8").strip())
         os.kill(pid, signal.SIGTERM)
-        print(f"Stopped Nexus proxy (PID: {pid}).")
+        print(f"Stopped Omnimux proxy (PID: {pid}).")
     except ProcessLookupError:
         print("Process not found. Cleaning up stale PID file.")
     except Exception as e:
@@ -101,7 +101,7 @@ async def _handle_keys(args: Any) -> None:
         else:
             keys = await list_client_keys(db)
             if not keys:
-                print("\nNo client keys found. Run 'nexus keys create [name]' to generate one.\n")
+                print("\nNo client keys found. Run 'omnimux keys create [name]' to generate one.\n")
                 return
             print(f"\n{'ID':<5} {'Name':<20} {'Prefix':<16} {'Status':<10} {'Created'}")
             print("-" * 70)
@@ -131,7 +131,7 @@ async def _handle_model(args: Any) -> None:
 async def _handle_export(args: Any) -> None:
     db = await _get_db()
     try:
-        path = getattr(args, "path", None) or "nexus_export.json"
+        path = getattr(args, "path", None) or "omnimux_export.json"
         await export_configuration(db, path)
         print(f"Exported configuration to {path}")
     finally:
@@ -141,11 +141,11 @@ async def _handle_export(args: Any) -> None:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s:\t  %(name)s - %(message)s")
 
-    parser = argparse.ArgumentParser(prog="nexus", description="Nexus LLM Proxy and Router CLI")
+    parser = argparse.ArgumentParser(prog="omnimux", description="Omnimux LLM Proxy and Router CLI")
     subparsers = parser.add_subparsers(dest="command")
 
     # start subcommand
-    start_parser = subparsers.add_parser("start", help="Start the Nexus proxy server")
+    start_parser = subparsers.add_parser("start", help="Start the Omnimux proxy server")
     start_parser.add_argument("--port", type=int, default=settings.port, help="Port to run on")
     start_parser.add_argument("--host", type=str, default="0.0.0.0", help="Host address")
     start_parser.add_argument(
@@ -153,7 +153,7 @@ def main() -> None:
     )
 
     # stop subcommand
-    subparsers.add_parser("stop", help="Stop detached Nexus proxy server")
+    subparsers.add_parser("stop", help="Stop detached Omnimux proxy server")
 
     # model subcommand
     model_parser = subparsers.add_parser("model", help="Manage upstream models and platforms")
@@ -173,7 +173,7 @@ def main() -> None:
     # export subcommand
     export_parser = subparsers.add_parser("export", help="Export configuration to JSON")
     export_parser.add_argument(
-        "path", nargs="?", default="nexus_export.json", help="Destination file path"
+        "path", nargs="?", default="omnimux_export.json", help="Destination file path"
     )
 
     # cache subcommand

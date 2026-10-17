@@ -6,7 +6,7 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
-from nexus_llm.services.db import (
+from omnimux.services.db import (
     auto_import_from_json_if_empty,
     create_client_key,
     export_configuration,
@@ -42,16 +42,16 @@ async def test_init_db_creates_all_tables(memory_db: aiosqlite.Connection) -> No
 async def test_client_keys_crud(memory_db: aiosqlite.Connection) -> None:
     # 1. Create
     raw_key1, info1 = await create_client_key(memory_db, "claude-code")
-    assert raw_key1.startswith("nx_")
+    assert raw_key1.startswith("om_")
     assert info1["name"] == "claude-code"
 
     raw_key2, _info2 = await create_client_key(memory_db, "web-app")
-    assert raw_key2.startswith("nx_")
+    assert raw_key2.startswith("om_")
 
     # 2. Validate
     assert await validate_client_key(memory_db, raw_key1) is True
     assert await validate_client_key(memory_db, raw_key2) is True
-    assert await validate_client_key(memory_db, "nx_invalid_token") is False
+    assert await validate_client_key(memory_db, "om_invalid_token") is False
 
     # 3. List
     keys = await list_client_keys(memory_db)

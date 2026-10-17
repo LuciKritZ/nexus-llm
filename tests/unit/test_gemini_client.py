@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from nexus_llm.exceptions import GeminiAPIError, QuotaExceededError, RateLimitError
-from nexus_llm.services.gemini_client import GeminiClient
+from omnimux.exceptions import GeminiAPIError, QuotaExceededError, RateLimitError
+from omnimux.services.gemini_client import GeminiClient
 
 
 def test_convert_openai_to_gemini() -> None:
@@ -156,7 +156,7 @@ async def test_generate_stream_quota_exceeded() -> None:
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("omnimux.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_generate_stream_max_retries(mock_sleep: AsyncMock) -> None:
     mock_response_500 = MagicMock()
     mock_response_500.status_code = 500
@@ -213,7 +213,7 @@ async def test_generate_stream_non_retryable_error() -> None:
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
+@patch("omnimux.services.gemini_client.asyncio.sleep", new_callable=AsyncMock)
 async def test_generate_stream_request_error_retries(mock_sleep: AsyncMock) -> None:
     request = httpx.Request("POST", "url")
     error = httpx.RequestError("Network unreachable", request=request)

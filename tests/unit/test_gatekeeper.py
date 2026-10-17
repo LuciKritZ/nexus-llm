@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 import httpx
 import pytest
 
-from nexus_llm.services.gatekeeper import Gatekeeper
+from omnimux.services.gatekeeper import Gatekeeper
 
 
 @pytest.fixture

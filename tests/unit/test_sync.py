@@ -7,8 +7,8 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
-from nexus_llm.services.db import init_db
-from nexus_llm.services.sync import sync_keys_from_json
+from omnimux.services.db import init_db
+from omnimux.services.sync import sync_keys_from_json
 
 
 @pytest_asyncio.fixture

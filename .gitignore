@@ -35,6 +35,7 @@ models.json
 
 # Local DB
 nexus_llm_state.db
+omnimux_state.db
 
 # Tests
 e2e_out.log
@@ -43,6 +44,9 @@ e2e_out.log
 nexus-llm.err.log
 nexus-llm.log
 nexus.log
+omnimux.log
+omnimux.err.log
 
 # PID files
 .nexus.pid
+.omnimux.pid

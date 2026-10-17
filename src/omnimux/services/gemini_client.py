@@ -6,8 +6,8 @@ from typing import Any
 
 import httpx
 
-from nexus_llm.exceptions import GeminiAPIError, QuotaExceededError, RateLimitError
-from nexus_llm.services.adapters import BaseLLMClient
+from omnimux.exceptions import GeminiAPIError, QuotaExceededError, RateLimitError
+from omnimux.services.adapters import BaseLLMClient
 
 logger = logging.getLogger(__name__)
 

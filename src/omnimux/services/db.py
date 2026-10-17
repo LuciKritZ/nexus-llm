@@ -72,8 +72,8 @@ async def init_db(db: aiosqlite.Connection) -> None:
 
 
 async def create_client_key(db: aiosqlite.Connection, name: str) -> tuple[str, dict[str, Any]]:
-    """Generates a secure client key (nx_...), stores its hash, and returns the raw key."""
-    raw_token = f"nx_{secrets.token_urlsafe(32)}"
+    """Generates a secure client key (om_...), stores its hash, and returns the raw key."""
+    raw_token = f"om_{secrets.token_urlsafe(32)}"
     key_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
     prefix = raw_token[:10] + "..."
 

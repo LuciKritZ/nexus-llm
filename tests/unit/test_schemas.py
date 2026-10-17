@@ -1,4 +1,4 @@
-from nexus_llm.models.schemas import ChatCompletionRequest
+from omnimux.models.schemas import ChatCompletionRequest
 
 
 def test_chat_completion_request_text() -> None:
@@ -40,7 +40,7 @@ def test_chat_completion_extra_fields_preserved() -> None:
 
 
 def test_convert_anthropic_to_chat_completion() -> None:
-    from nexus_llm.models.schemas import (
+    from omnimux.models.schemas import (
         AnthropicMessage,
         AnthropicMessagesRequest,
         convert_anthropic_to_chat_completion,

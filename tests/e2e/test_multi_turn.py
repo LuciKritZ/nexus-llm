@@ -7,7 +7,7 @@ import pytest
 import pytest_asyncio
 from httpx import Response
 
-from nexus_llm.app import create_app, lifespan
+from omnimux.app import create_app, lifespan
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
@@ -68,7 +68,7 @@ async def e2e_app(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[httpx.Async
             "supports_vision": True,
         }
 
-        from nexus_llm.config import settings
+        from omnimux.config import settings
 
         # Connect to the DB to insert 2 gemini keys
         async with aiosqlite.connect(settings.sqlite_db_path) as db:

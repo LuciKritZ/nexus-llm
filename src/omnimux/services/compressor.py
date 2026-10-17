@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from nexus_llm.config import settings
-from nexus_llm.utils.html import compress_html_to_markdown
+from omnimux.config import settings
+from omnimux.utils.html import compress_html_to_markdown
 
 
 class ContextCompressor:

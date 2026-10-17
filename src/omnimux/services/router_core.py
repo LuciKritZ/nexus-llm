@@ -7,7 +7,7 @@ from typing import Any
 
 import aiosqlite
 
-from nexus_llm.exceptions import NexusLLMError
+from omnimux.exceptions import NexusLLMError
 
 logger = logging.getLogger(__name__)
 

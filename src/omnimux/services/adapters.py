@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from nexus_llm.exceptions import QuotaExceededError, RateLimitError
+from omnimux.exceptions import QuotaExceededError, RateLimitError
 
 
 class BaseLLMClient(abc.ABC):

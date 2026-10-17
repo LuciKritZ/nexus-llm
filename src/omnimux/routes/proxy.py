@@ -8,18 +8,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from nexus_llm.config import settings
-from nexus_llm.models.schemas import (
+from omnimux.config import settings
+from omnimux.models.schemas import (
     AnthropicMessagesRequest,
     ChatCompletionRequest,
     convert_anthropic_to_chat_completion,
 )
-from nexus_llm.services.cache import ImageCache
-from nexus_llm.services.compressor import ContextCompressor
-from nexus_llm.services.db import validate_client_key
-from nexus_llm.services.gatekeeper import Gatekeeper
-from nexus_llm.services.multiplexer import Multiplexer
-from nexus_llm.services.unloader import ModelUnloader
+from omnimux.services.cache import ImageCache
+from omnimux.services.compressor import ContextCompressor
+from omnimux.services.db import validate_client_key
+from omnimux.services.gatekeeper import Gatekeeper
+from omnimux.services.multiplexer import Multiplexer
+from omnimux.services.unloader import ModelUnloader
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

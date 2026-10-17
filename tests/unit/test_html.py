@@ -1,4 +1,4 @@
-from nexus_llm.utils.html import compress_html_to_markdown
+from omnimux.utils.html import compress_html_to_markdown
 
 
 def test_compress_html_removes_scripts_and_styles() -> None:

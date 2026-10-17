@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from nexus_llm.services.unloader import ModelUnloader
+from omnimux.services.unloader import ModelUnloader
 
 
 @pytest.fixture

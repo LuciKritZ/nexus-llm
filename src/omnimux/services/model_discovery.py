@@ -6,8 +6,8 @@ from typing import Any
 import aiosqlite
 import httpx
 
-from nexus_llm.services.db import get_all_platforms_and_models, save_platform_and_models
-from nexus_llm.utils.cli_checklist import run_checklist
+from omnimux.services.db import get_all_platforms_and_models, save_platform_and_models
+from omnimux.utils.cli_checklist import run_checklist
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ async def run_add_model_wizard(
     protocol: str | None = None,
 ) -> None:
     """Interactive CLI wizard for adding an upstream platform and selecting its models."""
-    print("\n--- Nexus Model Setup Wizard ---")
+    print("\n--- Omnimux Model Setup Wizard ---")
     if not platform:
         platform = input("Platform name (e.g. openrouter, tokenharbor, custom): ").strip()
     if not protocol:
@@ -106,7 +106,7 @@ async def run_add_model_wizard(
         return
 
     options = [(m["id"], m.get("name", m["id"])) for m in discovered]
-    selected_ids = set(run_checklist(options, prompt="Select models to register in Nexus:"))
+    selected_ids = set(run_checklist(options, prompt="Select models to register in Omnimux:"))
 
     if not selected_ids:
         print("No models selected. Aborted.")
@@ -139,10 +139,10 @@ async def list_configured_models(db: aiosqlite.Connection) -> None:
     """Prints a formatted summary of all models registered in the database."""
     platforms_data = await get_all_platforms_and_models(db)
     if not platforms_data:
-        print("\nNo models configured yet. Run 'nexus model add' to add a platform.\n")
+        print("\nNo models configured yet. Run 'omnimux model add' to add a platform.\n")
         return
 
-    print("\n--- Configured Nexus Models ---")
+    print("\n--- Configured Omnimux Models ---")
     print(f"{'Model Name':<50} {'Context':<10} {'Vision':<8} {'Base URL'}")
     print("-" * 90)
     for model_name, info in platforms_data.items():

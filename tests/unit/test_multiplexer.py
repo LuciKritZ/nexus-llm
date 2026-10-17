@@ -3,9 +3,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nexus_llm.exceptions import RateLimitError
-from nexus_llm.services.multiplexer import Multiplexer
-from nexus_llm.services.router_core import NoKeysAvailableError
+from omnimux.exceptions import RateLimitError
+from omnimux.services.multiplexer import Multiplexer
+from omnimux.services.router_core import NoKeysAvailableError
 
 
 class MockStreamGen:
@@ -44,7 +44,7 @@ def mock_router() -> MagicMock:
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_success(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
     mock_router.get_best_platform_and_key.return_value = (
         "openrouter",
@@ -64,7 +64,7 @@ async def test_multiplexer_success(mock_get_client: MagicMock, mock_router: Magi
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_hot_swap_on_error(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
@@ -90,7 +90,7 @@ async def test_multiplexer_hot_swap_on_error(
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_fallback_to_ollama_on_exhaust(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
@@ -109,7 +109,7 @@ async def test_multiplexer_fallback_to_ollama_on_exhaust(
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_fallback_to_ollama_after_max_retries(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
@@ -138,9 +138,9 @@ async def test_multiplexer_fallback_to_ollama_after_max_retries(
 
 
 def test_get_client_for_platform() -> None:
-    from nexus_llm.services.adapters import OpenAICompatibleClient
-    from nexus_llm.services.gemini_client import GeminiClient
-    from nexus_llm.services.multiplexer import get_client_for_platform
+    from omnimux.services.adapters import OpenAICompatibleClient
+    from omnimux.services.gemini_client import GeminiClient
+    from omnimux.services.multiplexer import get_client_for_platform
 
     client1 = get_client_for_platform("gemini", "key1")
     assert isinstance(client1, GeminiClient)
@@ -156,23 +156,23 @@ def test_get_client_for_platform() -> None:
 
 
 def test_get_client_for_groq() -> None:
-    from nexus_llm.services.adapters import OpenAICompatibleClient
-    from nexus_llm.services.multiplexer import get_client_for_platform
+    from omnimux.services.adapters import OpenAICompatibleClient
+    from omnimux.services.multiplexer import get_client_for_platform
 
     client = get_client_for_platform("groq", "test_key")
     assert isinstance(client, OpenAICompatibleClient)
 
 
 def test_get_client_for_anthropic() -> None:
-    from nexus_llm.services.adapters import AnthropicClient
-    from nexus_llm.services.multiplexer import get_client_for_platform
+    from omnimux.services.adapters import AnthropicClient
+    from omnimux.services.multiplexer import get_client_for_platform
 
     client = get_client_for_platform("anthropic", "test_key")
     assert isinstance(client, AnthropicClient)
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_empty_stream(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
     mock_router.get_best_platform_and_key.return_value = (
         "openrouter",
@@ -192,7 +192,7 @@ async def test_multiplexer_empty_stream(mock_get_client: MagicMock, mock_router:
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_system_fallback(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
@@ -214,7 +214,7 @@ async def test_multiplexer_system_fallback(
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_ollama_fast_path(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
@@ -230,7 +230,7 @@ async def test_multiplexer_ollama_fast_path(
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_dot_notation(mock_get_client: MagicMock, mock_router: MagicMock) -> None:
     mock_router.get_best_platform_and_key.return_value = (
         "anthropic",
@@ -254,8 +254,8 @@ async def test_multiplexer_dot_notation(mock_get_client: MagicMock, mock_router:
 
 
 def test_get_client_for_platform_custom_protocols() -> None:
-    from nexus_llm.services.adapters import AnthropicClient, OpenAICompatibleClient
-    from nexus_llm.services.multiplexer import get_client_for_platform
+    from omnimux.services.adapters import AnthropicClient, OpenAICompatibleClient
+    from omnimux.services.multiplexer import get_client_for_platform
 
     c1 = get_client_for_platform("tokenharbor_anthropic", "k1", api_base="https://custom.api")
     assert isinstance(c1, AnthropicClient)
@@ -268,7 +268,7 @@ def test_get_client_for_platform_custom_protocols() -> None:
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_tier_alias_mapping(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
@@ -305,11 +305,11 @@ async def test_multiplexer_tier_alias_mapping(
 
 
 @pytest.mark.asyncio
-@patch("nexus_llm.services.multiplexer.get_client_for_platform")
+@patch("omnimux.services.multiplexer.get_client_for_platform")
 async def test_multiplexer_quota_exceeded(
     mock_get_client: MagicMock, mock_router: MagicMock
 ) -> None:
-    from nexus_llm.exceptions import QuotaExceededError
+    from omnimux.exceptions import QuotaExceededError
 
     mock_router.get_best_platform_and_key.side_effect = [
         ("anthropic", {"key_hash": "h1", "key_value": "v1", "meta": "{invalid json"}),

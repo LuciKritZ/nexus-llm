@@ -6,8 +6,8 @@ import aiosqlite
 import pytest
 import pytest_asyncio
 
-from nexus_llm.services.db import init_db
-from nexus_llm.services.router_core import NoKeysAvailableError, RouterCore
+from omnimux.services.db import init_db
+from omnimux.services.router_core import NoKeysAvailableError, RouterCore
 
 
 @pytest_asyncio.fixture

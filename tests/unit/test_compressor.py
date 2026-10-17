@@ -1,6 +1,6 @@
 from typing import Any
 
-from nexus_llm.services.compressor import ContextCompressor
+from omnimux.services.compressor import ContextCompressor
 
 
 def test_compressor_skips_short_text() -> None:
