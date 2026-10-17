@@ -45,7 +45,9 @@ def handle_start(args: Any) -> None:
             try:
                 old_pid = int(PID_FILE.read_text(encoding="utf-8").strip())
                 os.kill(old_pid, 0)
-                print(f"Omnimux proxy is already running (PID: {old_pid}). Run 'omnimux stop' first.")
+                print(
+                    f"Omnimux proxy is already running (PID: {old_pid}). Run 'omnimux stop' first."
+                )
                 return
             except (OSError, ValueError):
                 PID_FILE.unlink(missing_ok=True)
