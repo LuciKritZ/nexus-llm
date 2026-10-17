@@ -11,7 +11,11 @@ from nexus_llm.exceptions import CacheError, GeminiAPIError, NexusLLMError
 from nexus_llm.routes.proxy import router as proxy_router
 from nexus_llm.services.cache import ImageCache
 from nexus_llm.services.compressor import ContextCompressor
-from nexus_llm.services.db import init_db
+from nexus_llm.services.db import (
+    auto_import_from_json_if_empty,
+    get_all_platforms_and_models,
+    init_db,
+)
 from nexus_llm.services.gatekeeper import Gatekeeper
 from nexus_llm.services.gemini_client import GeminiClient
 from nexus_llm.services.multiplexer import Multiplexer
@@ -34,16 +38,19 @@ async def lifespan(app: FastAPI) -> typing.AsyncGenerator[None, None]:
         except Exception:  # pragma: no cover
             pass
 
+    db = await aiosqlite.connect(settings.sqlite_db_path)
+    await init_db(db)
+    await auto_import_from_json_if_empty(db, settings.models_json_path)
+    await sync_keys_from_json(db, settings.models_json_path)
+
+    db_platforms = await get_all_platforms_and_models(db)
+    models_dict = {**models_data.get("models", {}), **db_platforms}
+
     client = httpx.AsyncClient(timeout=300.0)
-    models_dict = models_data.get("models", {})
     unloader = ModelUnloader(http_client=client, platforms_data=models_dict)
     compressor = ContextCompressor()
     cache = ImageCache()
     gemini_client = GeminiClient(client=client)
-
-    db = await aiosqlite.connect(settings.sqlite_db_path)
-    await init_db(db)
-    await sync_keys_from_json(db, settings.models_json_path)
 
     router_core = RouterCore(db)
     gatekeeper = Gatekeeper(client, models_dict)
