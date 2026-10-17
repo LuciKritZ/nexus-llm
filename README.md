@@ -151,4 +151,4 @@ Legacy `nx_...` keys and existing SQLite states are automatically recognized and
 
 ## License
 
-MIT &copy; Lucikritz
+MIT &copy; LuciKritZ
