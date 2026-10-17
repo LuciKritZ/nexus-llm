@@ -118,7 +118,7 @@ async def run_add_model_wizard(
     await save_platform_and_models(db, platform, api_base, protocol, selected_models)
 
     # Save API key
-    key_hash = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+    key_hash = hashlib.sha256(f"{platform}:{api_key}".encode()).hexdigest()
     meta_json = json.dumps({"api_base": api_base, "protocol": protocol})
     await db.execute(
         """

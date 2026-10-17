@@ -49,6 +49,13 @@ async def verify_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing Bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if db:
         async with db.execute(
             "SELECT COUNT(*) FROM client_keys WHERE revoked_at IS NULL"

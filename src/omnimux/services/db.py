@@ -1,3 +1,4 @@
+import datetime
 import hashlib
 import json
 import secrets
@@ -117,22 +118,24 @@ async def list_client_keys(db: aiosqlite.Connection) -> list[dict[str, Any]]:
 
 async def revoke_client_key(db: aiosqlite.Connection, identifier: str) -> bool:
     """Revokes a client key by ID or prefix."""
+    now_iso = datetime.datetime.now(datetime.UTC).isoformat()
     if identifier.isdigit():
         cursor = await db.execute(
             """
-            UPDATE client_keys SET revoked_at = CURRENT_TIMESTAMP
+            UPDATE client_keys SET revoked_at = ?
             WHERE id = ? AND revoked_at IS NULL
         """,
-            (int(identifier),),
+            (now_iso, int(identifier)),
         )
     else:
-        pattern = f"{identifier}%"
+        escaped = identifier.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"{escaped}%"
         cursor = await db.execute(
             """
-            UPDATE client_keys SET revoked_at = CURRENT_TIMESTAMP
-            WHERE prefix LIKE ? AND revoked_at IS NULL
+            UPDATE client_keys SET revoked_at = ?
+            WHERE prefix LIKE ? ESCAPE '\\' AND revoked_at IS NULL
         """,
-            (pattern,),
+            (now_iso, pattern),
         )
     await db.commit()
     return cursor.rowcount > 0
@@ -194,6 +197,15 @@ async def save_platform_and_models(
 
 async def get_all_platforms_and_models(db: aiosqlite.Connection) -> dict[str, Any]:
     """Retrieves all configured models and platforms as an in-memory dictionary."""
+    platforms_dict: dict[str, Any] = {}
+
+    async with db.execute("SELECT name, api_base, protocol FROM platforms") as cursor:
+        platform_rows = await cursor.fetchall()
+    platforms_meta = {
+        name: {"api_base": api_base, "protocol": protocol}
+        for name, api_base, protocol in platform_rows
+    }
+
     async with db.execute("""
         SELECT
             m.platform, m.model_id, m.alias, m.max_input_tokens,
@@ -203,9 +215,10 @@ async def get_all_platforms_and_models(db: aiosqlite.Connection) -> dict[str, An
     """) as cursor:
         rows = await cursor.fetchall()
 
-    platforms_dict: dict[str, Any] = {}
+    seen_platforms = set()
     for row in rows:
         platform, model_id, alias, max_tokens, supports_vision, api_base, protocol = row
+        seen_platforms.add(platform)
         full_key = f"{platform}/{model_id}"
         model_info: dict[str, Any] = {
             "max_input_tokens": max_tokens or 200000,
@@ -220,6 +233,16 @@ async def get_all_platforms_and_models(db: aiosqlite.Connection) -> dict[str, An
             model_info["alias"] = alias
 
         platforms_dict[full_key] = model_info
+
+    for name, meta in platforms_meta.items():
+        if name not in seen_platforms:
+            platforms_dict[name] = {
+                "max_input_tokens": 200000,
+                "supports_vision": True,
+                "mode": "chat",
+                "apiBase": meta["api_base"],
+                "protocol": meta["protocol"],
+            }
 
     return platforms_dict
 

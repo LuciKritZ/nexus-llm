@@ -12,9 +12,6 @@ async def sync_keys_from_json(db: aiosqlite.Connection, json_path: str) -> None:
     except (FileNotFoundError, json.JSONDecodeError):
         return
 
-    # Clear existing keys to ensure no residual/deleted keys persist
-    await db.execute("DELETE FROM api_keys")
-
     keys_dict = data.get("keys", {})
     for platform, keys in keys_dict.items():
         if not isinstance(keys, list):
@@ -30,8 +27,8 @@ async def sync_keys_from_json(db: aiosqlite.Connection, json_path: str) -> None:
             if not key_value:
                 continue
 
-            # Create a deterministic hash of the key
-            key_hash = hashlib.sha256(key_value.encode("utf-8")).hexdigest()
+            # Create a deterministic platform-scoped hash of the key
+            key_hash = hashlib.sha256(f"{platform}:{key_value}".encode()).hexdigest()
 
             # Upsert into database
             await db.execute(
