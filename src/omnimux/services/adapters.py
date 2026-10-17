@@ -106,6 +106,9 @@ class AnthropicClient(BaseLLMClient):
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
+        anthropic_beta = kwargs.get("anthropic_beta") or kwargs.get("anthropic-beta")
+        if anthropic_beta:
+            headers["anthropic-beta"] = str(anthropic_beta)
 
         system_msg = ""
         anthropic_messages = []
@@ -125,7 +128,14 @@ class AnthropicClient(BaseLLMClient):
             payload["system"] = system_msg.strip()
 
         for k, v in kwargs.items():
-            if k not in ["max_tokens", "stream", "model", "messages"]:
+            if k not in [
+                "max_tokens",
+                "stream",
+                "model",
+                "messages",
+                "anthropic_beta",
+                "anthropic-beta",
+            ]:
                 payload[k] = v
 
         client_to_use = self.client or httpx.AsyncClient()
@@ -143,7 +153,12 @@ class AnthropicClient(BaseLLMClient):
                     try:
                         data = json.loads(data_str)
                         if data.get("type") == "content_block_delta":
-                            content = data.get("delta", {}).get("text")
+                            delta = data.get("delta", {})
+                            content = (
+                                delta.get("text")
+                                or delta.get("thinking")
+                                or delta.get("partial_json")
+                            )
                             if content:
                                 yield content
                     except (json.JSONDecodeError, KeyError):
