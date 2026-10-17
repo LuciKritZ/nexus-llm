@@ -112,7 +112,10 @@ async def test_reproduce_anthropic_client_forwards_anthropic_beta() -> None:
         mock_resp.status_code = 200
 
         async def aiter_lines():
-            yield 'data: {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "ok"}}'
+            yield (
+                'data: {"type": "content_block_delta", "delta": '
+                '{"type": "text_delta", "text": "ok"}}'
+            )
 
         mock_resp.aiter_lines = aiter_lines
         mock_stream.return_value.__aenter__.return_value = mock_resp
